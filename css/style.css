@@ -1,17 +1,18 @@
 html, body {
-	background:url('../img/CherryBlossoms.jpg') center center no-repeat;
+	background:url('../img/CherryBlossomsEdit.jpg') center center no-repeat;
 	height: 100%;
 	background-size:cover;
 }
 #logo img{
 	margin:0 auto !important;
-	padding-top:20px;
+	padding-top:10em;
 }
 #intro p{
 	color: white;
 	text-align:center;
 	font-family: 'Noto Sans KR', sans-serif;
-	font-size: 1.8em;
+	font-size: 3.8em;
+	padding-top: 50px;
 }
 
 
