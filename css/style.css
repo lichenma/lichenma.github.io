@@ -3,3 +3,17 @@ html, body {
 	height: 100%;
 	background-size:cover;
 }
+.logo {
+	position:absolute;
+	left: 50%;
+	transform: translate(-50%,0);
+	padding-top: 20px;
+}
+.intro p{
+	color: white;
+	text-align:center;
+	font-family: 'Noto Sans KR', sans-serif;
+	font-size: 1.8em;
+}
+
+
