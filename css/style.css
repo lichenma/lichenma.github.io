@@ -6,6 +6,8 @@ html, body {
 #logo img{
 	margin:0 auto !important;
 	padding-top:10em;
+	height: 30em;
+	text-align: center;
 }
 #intro p{
 	color: white;
