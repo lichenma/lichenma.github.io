@@ -4,17 +4,16 @@ html, body {
 	background-size:cover;
 }
 #logo img{
-	margin:0 auto !important;
-	padding-top:10em;
-	height: 30em;
-	text-align: center;
+	padding left: 5em;
+	padding-top: 15em;
+	height: 40em;
+	float:left;
 }
 #intro p{
+	float:right;
 	color: white;
-	text-align:center;
 	font-family: 'Noto Sans KR', sans-serif;
-	font-size: 3.8em;
-	padding-top: 50px;
+	font-size: 3em;
 }
 
 
