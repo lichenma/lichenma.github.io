@@ -29,10 +29,10 @@
 			<div class="collapse navbar-collapse" id="navbarResponsive">
 			  <ul class="navbar-nav ml-auto">
 				<li class="nav-item mx-0 mx-lg-1">
-				  <a class="nav-link py-3 px-0 px-lg-3 rounded js-scroll-trigger" href="#portfolio">Portfolio</a>
+				  <a class="nav-link py-3 px-0 px-lg-3 rounded js-scroll-trigger" href="#aboutme">About</a>
 				</li>
 				<li class="nav-item mx-0 mx-lg-1">
-				  <a class="nav-link py-3 px-0 px-lg-3 rounded js-scroll-trigger" href="#about">About</a>
+				  <a class="nav-link py-3 px-0 px-lg-3 rounded js-scroll-trigger" href="#portfolio">Portfolio</a>
 				</li>
 				<li class="nav-item mx-0 mx-lg-1">
 				  <a class="nav-link py-3 px-0 px-lg-3 rounded js-scroll-trigger" href="#contact">Contact</a>
@@ -57,21 +57,40 @@
 		</header>
 		
 		<!--About Me --> 
-		<section class="aboutme" id="aboutme">
+		<section class="bg-light text-black mb-0" id="aboutme">
 			<div class="container"> 
 				<h2 class="text-center text-uppercase text-secondary mb-0">About Me</h2>
 				<hr class="star-dark mb-5">
-				<div class="row">
+				<div class="content row">
 					<div class="col-md-12 about">
-						<p>I am a <a href=https://uwaterloo.ca/electrical-computer-engineering/future-undergraduate-students/computer-engineering">Computer Engineering</a> student at the University of Waterloo</p>
+						<p>I am a <a href=https://uwaterloo.ca/electrical-computer-engineering/future-undergraduate-students/computer-engineering">Computer Engineering</a> student at the University of Waterloo. I'm all about working to improve myself and I have a particular interest in the technology industry and its immense ability to change the world we live in. I aspire to be a part of this change and I am eagerly learning more about this field every day. I am passionately curious and a strong problem solver. <br><br> I am an eager learner and I strive to learn new things in all facets of life. I am a fitness enthusiast with a particular love for basketball (Go Spurs!).  Occasionally I would pick up my guitar and alto saxophone and fly through books but I haven't been able to keep up as much as I want to. I enjoy music from various genres ranging from kpop to rap and hip hop as well as a fair share of movies and dramas. If I have the time, I love to visit the outdoors and travel the world with my family and friends- I have been getting a lot more into hiking and boating in the beautiful parks around Canada. <br><br> When I'm not working on a project or reading tech tutorials, I love thinking about and playing around with small ideas that I have. I am incredibly passionate about starting challenging projects and tackling difficult problems- I hope that my passion for solving problems and learning will continue to be a central focus for my career in the future </p>
+					</div>
+				</div>
+				
+			</div>
+		</section>
+		
+		<!--Portfolio Section-->
+		<section class="bg-dark text-white mb-0" id="portfolio">
+			<div class="container"> 
+				<h2 class="text-center text-uppercase text-white mb-0">Portfolio</h2>
+				<hr class="star-dark mb-5">
+				<div class="row"> 
+				<!-- Right now there isn't really any big projects that I want to put in module windows but if there are later we can implement this functionality--> 
+					<div class="col-md-12 resume">
+						<a href="LichenMa.pdf"><img src="img/resume.png" class="img-responsive" id="resume" alt="Responsive image"></a>
 					</div>
 				</div>
 			</div>
-		</section>
-
+		</section> 
 
     <!-- Optional JavaScript -->
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+	<script src="jquery/jquery.js"></script>
+	<script src="js/bootstrap.bundle.min.js"></script>
+	
+	<script src="jquery-easing/jquery.easing.js"></script>	
+	
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js" integrity="sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut" crossorigin="anonymous"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" integrity="sha384-B0UglyR+jN6CkvvICOB2joaf5I4l3gm9GU6Hc1og6Ls7i6U/mkkaduKaBhlAXv9k" crossorigin="anonymous"></script>
@@ -95,7 +114,6 @@
 		  }
 	  });
 	</script>
-  
-  
+	<script src="js/freelancer.js"></script>
   </body>
 </html>

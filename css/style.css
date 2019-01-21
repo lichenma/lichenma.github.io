@@ -51,7 +51,8 @@ hr.star-dark:after {
 }
 
 section {
-  padding: 6rem 0;
+  padding-top: 10rem;
+  padding-bottom: 15rem;
 }
 
 section h2 {
@@ -178,7 +179,7 @@ section h2 {
 
 
 header.masthead {
-  padding-top: calc(6rem + 72px);
+  padding-top: calc(6rem + 50px);
   padding-bottom: 6rem;
 }
 
@@ -197,7 +198,7 @@ header.masthead img {
 
 @media (min-width: 992px) {
   header.masthead {
-    padding-top: calc(6rem + 106px);
+    padding-top: calc(6rem + 60px);
     padding-bottom: 6rem;
   }
   header.masthead h1 {
@@ -213,24 +214,41 @@ header.masthead img {
   }
 }
 
-.aboutme {
-	padding-top: 70px;
-	padding-bottom: 40px;
-	max-width: 700px;
-	margin-left: auto;
-	margin-right: auto;
-	text-align: left;
-	line-height: 30px;
-	color: #7b7b7b;
-}
 
-.aboutme p{
+.content p{
 	font-weight: 500;
-	font-size: 22px;
-	color: #7b7b7b;
+	font-size: 1.2em;
+	color: black;
 	font-family: "Montserrat", sans-serif;
+	text-align: justify;
+}
+
+@media (min-width: 992px) {
+  .content p{
+		font-weight: 500;
+		font-size: 1.2em;
+		color: black;
+		font-family: "Montserrat", sans-serif;
+		margin-left: 10em;
+		margin-right: 10em;
+		text-align:justify;
+	}
+}
+
+.aboutme {
+	padding-bottom: 30em;
 }
 
 
+#resume {
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.15), 0 3px 10px 0 rgba(0, 0, 0, 0.19);
+  transform: scale(0.95,0.95);
+}
+
+#resume:hover {
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+  transform: scale(1,1);
+}
 
 
