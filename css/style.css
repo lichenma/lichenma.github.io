@@ -42,7 +42,7 @@ hr.star-light:after {
 }
 
 hr.star-dark {
-  border-color: #2C3E50;
+  border-color: gray;
 }
 
 hr.star-dark:after {
