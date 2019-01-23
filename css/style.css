@@ -215,26 +215,6 @@ header.masthead img {
 }
 
 
-.content p{
-	font-weight: 500;
-	font-size: 1.2em;
-	color: gray;
-	font-family: "Montserrat", sans-serif;
-	text-align: justify;
-}
-
-@media (min-width: 992px) {
-  .content p{
-		font-weight: 500;
-		font-size: 1.2em;
-		color: gray;
-		font-family: "Montserrat", sans-serif;
-		margin-left: 10em;
-		margin-right: 10em;
-		text-align:justify;
-	}
-}
-
 
 #resume {
   transition: all 0.2s ease-in-out;
@@ -277,6 +257,26 @@ header.masthead img {
 	  margin-right: auto;
 	  width: 40%;
 	  margin-bottom: 5em;
+	}
+}
+
+.content p{
+	font-weight: 500;
+	font-size: 1.2em;
+	color: gray;
+	font-family: "Montserrat", sans-serif;
+	text-align: justify;
+}
+
+@media (min-width: 992px) {
+  .content p{
+		font-weight: 500;
+		font-size: 1.2em;
+		color: gray;
+		font-family: "Montserrat", sans-serif;
+		margin-left: 10em;
+		margin-right: 10em;
+		text-align:justify;
 	}
 }
 
