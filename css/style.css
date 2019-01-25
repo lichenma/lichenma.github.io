@@ -133,13 +133,13 @@ section h2 {
 
 @media (min-width: 992px) {
   #mainNav {
-    padding-top: 1.5rem;
-    padding-bottom: 1.5rem;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
     -webkit-transition: padding-top 0.3s, padding-bottom 0.3s;
     transition: padding-top 0.3s, padding-bottom 0.3s;
   }
   #mainNav .navbar-brand {
-    font-size: 2em;
+    font-size: 1em;
     -webkit-transition: font-size 0.3s;
     transition: font-size 0.3s;
   }
@@ -165,6 +165,7 @@ section h2 {
 
 #typingAnimation {
   color: #c5c5c5;
+  font-size: 1em;
 }
 
 #typed-cursor {
@@ -184,12 +185,12 @@ header.masthead {
 }
 
 header.masthead h1 {
-  font-size: 3rem;
+  font-size: 2rem;
   line-height: 3rem;
 }
 
 header.masthead h2 {
-  font-size: 1.3rem;
+  font-size: 1rem;
   font-family: 'Lato';
 }
 
@@ -198,12 +199,12 @@ header.masthead img {
 
 @media (min-width: 992px) {
   header.masthead {
-    padding-top: calc(6rem + 60px);
+    padding-top: calc(4.5rem + 10px);
     padding-bottom: 6rem;
   }
   header.masthead h1 {
-    font-size: 4.75em;
-    line-height: 4rem;
+    font-size: 2.5em;
+    
   }
   header.masthead h2 {
     font-size: 1.75em;
@@ -233,7 +234,7 @@ header.masthead img {
   display: block;
   margin-left: auto;
   margin-right: auto;
-  width: 60%;
+  width: 70%;
   margin-bottom: 5em;
 }
 
@@ -245,7 +246,7 @@ header.masthead img {
 	  display: block;
 	  margin-left: auto;
 	  margin-right: auto;
-	  width: 40%;
+	  width: 70%;
 	  margin-bottom: 5em;
 	}
 
@@ -255,7 +256,7 @@ header.masthead img {
 	  display: block;
 	  margin-left: auto;
 	  margin-right: auto;
-	  width: 40%;
+	  width: 60%;
 	  margin-bottom: 5em;
 	}
 }
@@ -280,5 +281,8 @@ header.masthead img {
 	}
 }
 
-
+iframe{
+	display: block;
+	margin: auto;
+}
 
