@@ -234,7 +234,7 @@ header.masthead img {
   display: block;
   margin-left: auto;
   margin-right: auto;
-  width: 70%;
+  width: 60%;
   margin-bottom: 5em;
 }
 
@@ -246,7 +246,7 @@ header.masthead img {
 	  display: block;
 	  margin-left: auto;
 	  margin-right: auto;
-	  width: 70%;
+	  width: 60%;
 	  margin-bottom: 5em;
 	}
 
@@ -275,8 +275,8 @@ header.masthead img {
 		font-size: 1.2em;
 		color: gray;
 		font-family: "Montserrat", sans-serif;
-		margin-left: 10em;
-		margin-right: 10em;
+		margin-left: 12em;
+		margin-right: 12em;
 		text-align:justify;
 	}
 }
@@ -289,10 +289,9 @@ iframe{
 *{box-sizing:border-box} 
 
 .slideshow-container{
-	width: 500px;
-	height: 300px;
 	position: relative; 
 	margin: auto;
+	max-width: 700px;
 }
 
 .mySlides{
@@ -358,8 +357,10 @@ iframe{
 .fade {
   -webkit-animation-name: fade;
   -webkit-animation-duration: 1.5s;
+  -webkit-animation-fill-mode: forwards;
   animation-name: fade;
   animation-duration: 1.5s;
+  animation-fill-mode:forwards;
 }
 
 @-webkit-keyframes fade {
@@ -372,11 +373,17 @@ iframe{
   to {opacity: 1}
 }
 
-#image{
-	vertical-align: middle;
-	height:100%;
-	width:100%;
+.text{
+	display:none;
 }
+
+#image{
+	display:block;
+	max-height: auto;
+	max-width:100%;
+}
+
+
 
 
 
