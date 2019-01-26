@@ -104,7 +104,53 @@
 			<div class="container">
 				<h2 class="text-center text-uppercase text-white mb-0">Photography</h2>
 				<hr class="star-light">
+				<div class="slideshow-container">
+					<div class="mySlides fade"> 
+						<div class="numbertext">1 / 6</div>
+						<img id="image" src="img/CherryBlossomsEdit.jpg">
+						<div class="text">Cherry Blossoms at High Park</div> 
+					</div> 
+					<div class="mySlides fade"> 
+						<div class="numbertext">2 / 6</div>
+						<img id ="image" src="img/Sunset.jpg">
+						<div class="text">Sunset at Vaughn Mills</div> 
+					</div> 
+					<div class="mySlides fade"> 
+						<div class="numbertext">3 / 6</div>
+						<img id ="image" src="img/ColumbiaLake.jpg">
+						<div class="text">Waterloo Columbia Lake</div> 
+					</div> 
+					<div class="mySlides fade"> 
+						<div class="numbertext">4 / 6</div>
+						<img id ="image" src="img/CherryBlossoms2.jpg">
+						<div class="text">Cherry Blossoms at Robarts</div> 
+					</div> 
+					<div class="mySlides fade"> 
+						<div class="numbertext">5 / 6</div>
+						<img id ="image" src="img/Groundhog.jpg">
+						<div class="text">Napping Groundhog</div> 
+					</div> 
+					<div class="mySlides fade"> 
+						<div class="numbertext">6 / 6</div>
+						<img id ="image" src="img/Squirrel.jpg">
+						<div class="text">Curious Squirrel</div> 
+					</div> 
+					<a class="prev" onclick="plusSlides(-1)">&#10094;</a>
+					<a class="next" onclick="plusSlides(1)">&#10095;</a>
+				</div> 
+				<br> 
 				
+				<div style="text-align:center">
+					<span class="dot" onclick="currentSlide(1)"></span> 
+					<span class="dot" onclick="currentSlide(2)"></span> 
+					<span class="dot" onclick="currentSlide(3)"></span> 
+					<span class="dot" onclick="currentSlide(4)"></span> 
+					<span class="dot" onclick="currentSlide(5)"></span> 
+					<span class="dot" onclick="currentSlide(6)"></span> 
+				</div> 
+			</div>
+		</section>
+					
 
     <!-- Optional JavaScript -->
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
@@ -136,6 +182,36 @@
 		  }
 	  });
 	</script>
+	<script>
+		var slideIndex = 1;
+		showSlides(slideIndex);
+
+		// Next/previous controls
+		function plusSlides(n) {
+		  showSlides(slideIndex += n);
+		}
+
+		// Thumbnail image controls
+		function currentSlide(n) {
+		  showSlides(slideIndex = n);
+		}
+
+		function showSlides(n) {
+		  var i;
+		  var slides = document.getElementsByClassName("mySlides");
+		  var dots = document.getElementsByClassName("dot");
+		  if (n > slides.length) {slideIndex = 1} 
+		  if (n < 1) {slideIndex = slides.length}
+		  for (i = 0; i < slides.length; i++) {
+			  slides[i].style.display = "none"; 
+		  }
+		  for (i = 0; i < dots.length; i++) {
+			  dots[i].className = dots[i].className.replace(" active", "");
+		  }
+		  slides[slideIndex-1].style.display = "block"; 
+		  dots[slideIndex-1].className += " active";
+		}
+	</script> 
 	<script src="js/freelancer.js"></script>
   </body>
 </html>
