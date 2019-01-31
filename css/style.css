@@ -93,7 +93,7 @@ section h2 {
   line-height: 3.1rem;
 }
 
-a:before { /* Just to add a shadow to the navigation bar*/
+a:after { /* Just to add a shadow to the navigation bar*/
 	content: '';
     display: block;
     width: 100%;
