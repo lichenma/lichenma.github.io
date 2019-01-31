@@ -93,6 +93,22 @@ section h2 {
   line-height: 3.1rem;
 }
 
+a:before { /* Just to add a shadow to the navigation bar*/
+	content: '';
+    display: block;
+    width: 100%;
+    height: 0.25em;
+	margin: auto;
+    background: rgba(0,0,0,.35);
+    
+    position: absolute;
+    bottom:-5px;
+	right: 5px;
+    -webkit-filter: blur(5px);
+    filter: blur(5px);
+    z-index:-5;
+}
+
 
 #mainNav {
   padding-top: 1rem;
@@ -381,6 +397,48 @@ iframe{
 	display:block;
 	max-height: auto;
 	max-width:100%;
+}
+
+
+.book {
+	padding: 0.5em 0 0 0;
+	margin: auto;
+	margin-top: 3em;
+	
+}
+a.book:before { /* Just to give a shadow below the books */
+	content: '';
+    display: block;
+    width: 10%;
+    height: 0.5em;
+    background: rgba(0,0,0,.35);
+    border-radius: 50%;
+    position: absolute;
+    bottom:-10px;
+    -webkit-filter: blur(5px);
+    filter: blur(5px);
+    z-index:-5;
+}
+.shelf {
+	border-bottom: 30px solid #a5a5a5;
+    border-left: 20px solid transparent;
+    border-right: 20px solid transparent;
+	top: -15px;
+	z-index: -10;
+}
+/*Example adding pseudo element to give shelf depth*/
+.shelf:after {
+	content: '';
+	background: #686868;
+	height: 20px;
+	width: calc(100% + 40px); /*IE9+*/
+	position: absolute;
+	top: 30px;
+	left: 0;
+	right: 0;
+	z-index: 1;
+	margin: 0 -20px;
+	color: black;
 }
 
 
