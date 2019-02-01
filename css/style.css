@@ -401,11 +401,23 @@ iframe{
 
 
 .book {
+	transition: all 0.2s ease-in-out;
+    box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.15), 0 3px 10px 0 rgba(0, 0, 0, 0.19);
 	padding: 0.5em 0 0 0;
 	margin: auto;
 	margin-top: 3em;
+	max-width: 8em;
+	transform: scale(0.95,0.95);
 	
 }
+.book:hover{
+	padding: 0.5em 0 0 0;
+	margin: auto;
+	margin-top: 3em;
+	max-width: 8em;
+	transform: scale(1,1);
+}
+
 a.book:before { /* Just to give a shadow below the books */
 	content: '';
     display: block;
@@ -425,6 +437,7 @@ a.book:before { /* Just to give a shadow below the books */
     border-right: 20px solid transparent;
 	top: -15px;
 	z-index: -10;
+	margin-bottom:3em;
 }
 /*Example adding pseudo element to give shelf depth*/
 .shelf:after {
@@ -441,9 +454,18 @@ a.book:before { /* Just to give a shadow below the books */
 	color: black;
 }
 
+/*Make sure pictures have ratio 1:1.6 and books have ratio 1:1.5*/
 
 
+#contactme{
+	background-color: #0c2449;
 
+	padding-bottom:3em;
+	padding-top:8em;
+}
 
+p.lead{
+	text-align:justify;
+}
 
 
