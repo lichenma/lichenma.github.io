@@ -34,4 +34,5 @@ Chrome Version 71.0.3578.98
 
 * Matt Boldt - typing javascript
 * Kristen Ramesh 
+* BlackrockDigital
 * jme11 - bookshelf
