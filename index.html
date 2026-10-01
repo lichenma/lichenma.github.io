@@ -12,22 +12,9 @@
     <link rel="stylesheet" href="font-awesome/css/all.min.css">
     <link href="https://fonts.googleapis.com/css?family=Noto+Sans+KR" rel="stylesheet">
 	<link rel="icon" href="img/favicon.ico">
-	
-	<!-- Global site tag (gtag.js) - Google Analytics -->
-	<script async src="https://www.googletagmanager.com/gtag/js?id=UA-133680916-1"></script>
-	<script>
-	  window.dataLayer = window.dataLayer || [];
-	  function gtag(){dataLayer.push(arguments);}
-	  gtag('js', new Date());
-
-	  gtag('config', 'UA-133680916-1');
-	</script>
-
   </head>
-  <body>
-
+  <body id="page-top">
 	<!-- Bootstrap 4 Grid Layout-->
-	<body id="page-top">
 	
 		<!-- Navigation -->
 		<nav class="navbar navbar-expand-lg bg-secondary fixed-top text-uppercase" id="mainNav">
@@ -44,6 +31,9 @@
 				</li>
 				<li class="nav-item mx-0 mx-lg-1">
 				  <a class="nav-link py-3 px-0 px-lg-3 rounded js-scroll-trigger" href="#portfolio">Portfolio</a>
+				</li>
+				<li class="nav-item mx-0 mx-lg-1">
+				  <a class="nav-link py-3 px-0 px-lg-3 rounded" href="gaming.html">Gaming</a>
 				</li>
 				<li class="nav-item mx-0 mx-lg-1">
 				  <a class="nav-link py-3 px-0 px-lg-3 rounded js-scroll-trigger" href="#contactme">Contact</a>
@@ -97,7 +87,7 @@
 				</div>
 				<div class="content row"> 
 					<div class="col-md-12 links"> 
-						<p class="text-center"> My coding projects can be found on <a href="http://github.com/lichenma">Github</a>
+						<p class="text-center"> My coding projects can be found on <a href="https://github.com/lichenma">Github</a>
 					</div>
 				</div>
 			</div>
@@ -109,7 +99,9 @@
 				<h2 class="text-center text-uppercase text-secondary mb-0">Music</h2> 
 				<hr class="star-dark mb-5"></hr>
 				<div class="player row">
-					<iframe id="player"  width="680" height="385" src="https://www.youtube.com/embed/playlist?list=PLQUioc0U_7mtqKF9dG8orMZBTV10ndgIN" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>	
+					<div class="embed-responsive embed-responsive-16by9" style="max-width:680px;margin:auto;">
+						<iframe id="player" class="embed-responsive-item" src="https://www.youtube.com/embed/playlist?list=PLQUioc0U_7mtqKF9dG8orMZBTV10ndgIN" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+					</div>
 				</div> 	
 			</div>
 		</section>
@@ -243,11 +235,6 @@
 						</a>
 					  </li>
 					  <li class="list-inline-item">
-						<a class="btn btn-outline-light btn-social text-center rounded-circle" href="https://plus.google.com/105618601818722273959">
-						  <i class="fab fa-fw fa-google-plus-g"></i>
-						</a>
-					  </li>
-					  <li class="list-inline-item">
 						<a class="btn btn-outline-light btn-social text-center rounded-circle" href="https://www.facebook.com/lichen.ma.96">
 						  <i class="fab fa-fw fa-facebook-f"></i>
 						</a>
@@ -264,7 +251,7 @@
 
 		<div class="bg-dark copyright py-4 text-center text-white">
 		  <div class="container">
-			<small>Copyright &copy; <i>Lichen Ma 2019</i></small>
+			<small>Copyright &copy; <i>Lichen Ma 2026</i></small>
 		  </div>
 		</div>
 
@@ -279,7 +266,6 @@
 
     <!-- Optional JavaScript -->
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
-	<script src="js/bootstrap.bundle.min.js"></script>
 	<script src="jquery/jquery.js"></script>
 	
 	
@@ -288,7 +274,6 @@
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js" integrity="sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut" crossorigin="anonymous"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" integrity="sha384-B0UglyR+jN6CkvvICOB2joaf5I4l3gm9GU6Hc1og6Ls7i6U/mkkaduKaBhlAXv9k" crossorigin="anonymous"></script>
-	<script src="https://cdn.jsdelivr.net/npm/typed.js@2.0.9"></script>
 	<script src="js/typed.js"></script> 
 	<script>
 	  $(function(){
@@ -339,6 +324,5 @@
 		}
 	</script> 
 	<script src="js/freelancer.js"></script>
-   </body>
   </body>
 </html>
