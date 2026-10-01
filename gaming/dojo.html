@@ -25,6 +25,25 @@
 @media(max-width:620px){.shell{padding-left:10px;padding-right:10px}.start{padding:24px 18px;border-radius:20px}h1{font-size:42px}.primary{width:100%}.arena{min-height:465px}.bot .side-grid{grid-template-columns:minmax(0,1fr) 112px}.you .side-grid{grid-template-columns:118px minmax(0,1fr)}.visual{height:118px}.sprite{width:112px;height:112px}.fallback{width:76px;height:84px}.mon-name{font-size:16px}.team{grid-template-columns:repeat(3,minmax(0,1fr))}.moves,.switches{grid-template-columns:1fr}.fieldbar{align-items:flex-start;flex-direction:column}.hazards{align-items:flex-start}.hazard-row{justify-content:flex-start}.remaining-head{font-size:9px}.pip{width:13px;height:13px}.pip:after{top:5px}.loadout{flex-direction:column;gap:4px}.slot .stat-pop{left:0;transform:none}.slot:nth-child(3n) .stat-pop{right:0;left:auto}.controls{border-radius:18px}}
 @media(max-width:390px){h1{font-size:36px}.arena{min-height:445px}.bot .side-grid{grid-template-columns:minmax(0,1fr) 94px}.you .side-grid{grid-template-columns:100px minmax(0,1fr)}.visual{height:105px}.sprite{width:98px;height:98px}.fallback{width:68px;height:76px}.status{padding:9px}.mon-name{font-size:14px}.inspect{display:none}.team{gap:5px}.orb{width:23px;height:23px}.slot-name{font-size:9px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+.arena.doubles{min-height:600px}
+.arena.doubles .active-side{width:min(94%,620px)}
+.dpair{display:grid;gap:10px}
+.arena.doubles .bot .side-grid{grid-template-columns:minmax(0,1fr) 92px}
+.arena.doubles .you .side-grid{grid-template-columns:92px minmax(0,1fr)}
+.arena.doubles .visual{height:86px}
+.arena.doubles .status{padding:8px 10px}
+.arena.doubles .mon-name{font-size:15px}
+.arena.doubles .status-meta{font-size:12px}
+.dslots{display:grid;gap:12px}
+.dslot{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:color-mix(in srgb,var(--paper) 94%,var(--sky))}
+.dslot-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+.dslot-head b{font-size:14px;white-space:nowrap}
+.dslot-head span{font-size:12.5px;color:var(--muted);text-align:right}
+.dslot.idle{opacity:.72}
+.tpick{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0;padding:8px 10px;border:1px dashed var(--accent);border-radius:10px;background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.tbtns{display:flex;flex-wrap:wrap;gap:8px}
+.tbtn{border:1px solid var(--accent);border-radius:999px;padding:6px 12px;background:var(--paper);font-weight:600}
+.move.picked,.switch.picked{outline:3px solid var(--accent);outline-offset:1px}
 </style>
 </head>
 <body>
@@ -36,7 +55,7 @@
       <h1>A battle that <span>waits for you.</span></h1>
       <p class="lede">Random teams, a patient sparring bot, and no ladder pressure. Pick a generation and take the first turn.</p>
       <div class="setup">
-        <div class="select-wrap"><label class="hidden" for="format">Generation</label><select id="format"><option value="gen4randombattle">Gen 4 Random Battle</option><option value="gen5randombattle">Gen 5 Random Battle</option><option value="gen6randombattle">Gen 6 Random Battle</option><option value="gen7randombattle">Gen 7 Random Battle</option><option value="gen8randombattle">Gen 8 Random Battle</option><option value="gen9randombattle">Gen 9 Random Battle</option></select></div>
+        <div class="select-wrap"><label class="hidden" for="format">Generation</label><select id="format"><option value="gen4randombattle">Gen 4 Random Battle</option><option value="gen5randombattle">Gen 5 Random Battle</option><option value="gen6randombattle">Gen 6 Random Battle</option><option value="gen7randombattle">Gen 7 Random Battle</option><option value="gen8randombattle">Gen 8 Random Battle</option><option value="gen9randombattle">Gen 9 Random Battle</option><option value="gen9randomdoublesbattle">Gen 9 Random Doubles</option></select></div>
         <button id="startBtn" class="primary">Start a battle</button>
       </div>
       <div class="sub-actions"><button id="downloadBtn" class="text-button">Download standalone HTML</button><button id="aboutBtn" class="text-button">How direct mode works</button></div>
@@ -69,7 +88,7 @@
 var PS_LOGIN_HOST='https://play.pokemonshowdown.com';// Login-helper host: point this at your own worker URL later; the official host blocks cross-origin fetch from this page.
 var $=function(id){return document.getElementById(id)};
 var TYPE={bug:'#77a83b',dark:'#5d5366',dragon:'#616cca',electric:'#d49b16',fairy:'#d978a4',fighting:'#bd523e',fire:'#df6b35',flying:'#718cc0',ghost:'#655da2',grass:'#4f9b62',ground:'#ad783f',ice:'#4da8ae',normal:'#8b8d87',poison:'#9a5aa7',psychic:'#cf5d79',rock:'#9a8251',steel:'#66858c',water:'#4d79bd'};
-var LABELS={gen4randombattle:'Gen 4 Random Battle',gen5randombattle:'Gen 5 Random Battle',gen6randombattle:'Gen 6 Random Battle',gen7randombattle:'Gen 7 Random Battle',gen8randombattle:'Gen 8 Random Battle',gen9randombattle:'Gen 9 Random Battle'};
+var LABELS={gen4randombattle:'Gen 4 Random Battle',gen5randombattle:'Gen 5 Random Battle',gen6randombattle:'Gen 6 Random Battle',gen7randombattle:'Gen 7 Random Battle',gen8randombattle:'Gen 8 Random Battle',gen9randombattle:'Gen 9 Random Battle',gen9randomdoublesbattle:'Gen 9 Random Doubles'};
 var state=null, player=null, bot=null, moveDex={}, pokeDex={}, startToken=0, spriteUrls=[];
 function toID(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'')}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
@@ -78,7 +97,19 @@ function hpInfo(condition){var main=String(condition||'0/100').split(' ')[0],bit
 function levelFrom(details){var m=String(details||'').match(/(?:^|, )L(\d+)/);return m?Number(m[1]):100}
 function speciesFrom(details){return String(details||'Pokémon').split(',')[0].trim()}
 function spriteId(details){return toID(speciesFrom(details)).replace(/nidoranf$/,'nidoran-f').replace(/nidoranm$/,'nidoran-m')}
-function freshState(format){return {format:format,room:'',turn:0,request:null,phase:'wait',ended:false,result:'',log:[],events:[],lastCue:null,weather:null,hazards:{p1:{},p2:{}},playerTeam:[],opponents:[],active:{p1:null,p2:null},boosts:{p1:{},p2:{}},sub:{p1:false,p2:false},revealed:{p1:{ability:'',item:''},p2:{ability:'',item:''}},busy:true,connected:false}}
+function freshState(format){
+var dbl=/doubles/.test(format);
+return {
+format:format,doubles:dbl,room:'',turn:0,request:null,phase:'wait',ended:false,result:'',log:[],events:[],lastCue:null,weather:null,hazards:{p1:{},p2:{}}
+,playerTeam:[],opponents:[]
+,active:dbl?{p1:[null,null],p2:[null,null]}:{p1:null,p2:null}
+,boosts:dbl?{p1:[{},{}],p2:[{},{}]}:{p1:{},p2:{}}
+,sub:dbl?{p1:[false,false],p2:[false,false]}:{p1:false,p2:false}
+,revealed:dbl?{p1:[{ability:'',item:''},{ability:'',item:''}],p2:[{ability:'',item:''},{ability:'',item:''}]}:{p1:{ability:'',item:''},p2:{ability:'',item:''}}
+,pending:[null,null],targeting:null
+,busy:true,connected:false
+}
+}
 function randomName(prefix){var n=Math.floor(Math.random()*2176782336).toString(36).slice(0,6);return (prefix+n).slice(0,17)}
 function setConn(text,kind){['connectionStart','connectionBattle'].forEach(function(id){var e=$(id);e.className='connection '+(kind||'');e.querySelector('span').textContent=text})}
 function showError(message){$('error').textContent=message;$('error').classList.remove('hidden');$('start').classList.remove('hidden');$('battle').classList.add('hidden');$('startBtn').disabled=false;$('startBtn').textContent='Try again';setConn('Could not connect','bad')}
@@ -94,15 +125,89 @@ function loadDex(){var a=fetch(PS_LOGIN_HOST+'/data/moves.json',{mode:'cors'}).t
 function startBattle(){startToken++;var token=startToken;if(player)player.close();if(bot)bot.close();clearError();state=freshState($('format').value);$('startBtn').disabled=true;$('startBtn').textContent='Opening the mat…';$('start').classList.add('hidden');$('battle').classList.remove('hidden');$('formatLabel').firstChild.nodeValue=LABELS[state.format].toUpperCase();setConn('Opening two temporary guest seats…','');render();player=new PSClient(randomName('DojoLeaf'),'player',token);bot=new PSClient(randomName('SparBot'),'bot',token);Promise.all([loadDex(),player.connect(),bot.connect()]).then(function(){if(token!==startToken)return;maybeChallenge()}).catch(function(e){if(token!==startToken)return;if(player)player.close();if(bot)bot.close();showError((e&&e.message)||'The battle connection failed.')})}
 function addLog(text){if(!state||!text)return;var last=state.log[state.log.length-1];if(last&&last.turn===state.turn&&last.text===text)return;state.log.push({turn:state.turn,text:text});if(state.log.length>60)state.log.shift()}
 function activeKey(ident){return String(ident).indexOf('p1')===0?'p1':'p2'}
+function activeSlot(ident){var m=/^p[12]([a-c])/i.exec(String(ident||''));return m?(m[1].toLowerCase().charCodeAt(0)-97):0;}
+function slotActive(side,slot){return state.doubles?state.active[side][slot|0]:state.active[side];}
+function slotBoosts(side,slot){return state.doubles?state.boosts[side][slot|0]:state.boosts[side];}
+function slotRevealed(side,slot){return state.doubles?state.revealed[side][slot|0]:state.revealed[side];}
+function slotSubGet(side,slot){return state.doubles?state.sub[side][slot|0]:state.sub[side];}
+function slotSubSet(side,slot,v){if(state.doubles)state.sub[side][slot|0]=v;else state.sub[side]=v;}
+var CHOOSABLE_T={normal:1,any:1,adjacentAlly:1,adjacentAllyOrSelf:1,adjacentFoe:1};
+function needsTarget(opt){return !!(opt&&CHOOSABLE_T[opt.target]);}
+function eventSuffix(a,k){var s='';if(a.canMegaEvo)s=' mega';else if(a.canZMove&&a.canZMove[k])s=' zmove';return s;}
 function cleanName(ident){return String(ident||'Pokémon').replace(/^p[12][a-z]?: /,'')}
 function ensureOpponent(name,details,condition){var key=toID(speciesFrom(details||name)),found=state.opponents.find(function(x){return x.key===key||x.name===name});if(!found){found={key:key,name:name,details:details||name,condition:condition||'100/100',level:levelFrom(details),item:'',ability:''};state.opponents.push(found)}if(details)found.details=details;if(condition)found.condition=condition;return found}
 function findMon(side,name){if(side==='p1')return state.playerTeam.find(function(x){return x.name===name||speciesFrom(x.details)===name});return state.opponents.find(function(x){return x.name===name||speciesFrom(x.details)===name})}
-function setHp(side,ident,condition){var name=cleanName(ident),mon=findMon(side,name);if(mon)mon.condition=condition;if(state.active[side]&&state.active[side].name===name)state.active[side].condition=condition}
+function setHp(side,ident,condition){var name=cleanName(ident),mon=findMon(side,name);if(mon)mon.condition=condition;var cur=slotActive(side,activeSlot(ident));if(cur&&cur.name===name)cur.condition=condition;}
 function effectLabel(x){return String(x||'').replace(/^move: /,'').replace(/^ability: /,'').replace(/^item: /,'')}
 function pushEvent(kind,label,text){state.events.push({kind:kind,label:label,text:text});if(state.events.length>4)state.events.shift();setTimeout(function(){if(state){state.events=[];renderEvents()}},2400)}
-function handleBattleLine(line){if(!state||!line)return;var p=line.split('|'),ev=p[1]||'';if(ev==='init'){state.connected=true;state.busy=true;setConn('Live on Pokémon Showdown','live')}else if(ev==='request'){try{state.request=JSON.parse(line.slice(9));applyRequest(state.request)}catch(e){};state.busy=false}else if(ev==='turn'){state.turn=Number(p[2])||state.turn;state.events=[];state.busy=false}else if(ev==='switch'||ev==='drag'||ev==='replace'){var side=activeKey(p[2]),name=cleanName(p[2]),mon;if(side==='p1'){mon=findMon('p1',name)||{name:name,details:p[3],condition:p[4]};}else mon=ensureOpponent(name,p[3],p[4]);mon.name=name;mon.details=p[3];mon.condition=p[4];state.active[side]=mon;state.boosts[side]={};state.sub[side]=false;addLog((side==='p1'?'You sent out ':'Dojo Bot sent out ')+name+'.')}else if(ev==='move'){var mside=activeKey(p[2]),move=p[3]||'a move',data=moveDex[toID(move)]||{};state.lastCue={side:mside,move:move,type:data.type||'Normal',category:data.category||'Status'};addLog((mside==='p1'?'You':'Dojo Bot')+' used '+move+'.');showCue(state.lastCue)}else if(ev==='-damage'||ev==='-heal'){var dside=activeKey(p[2]);setHp(dside,p[2],p[3]);if(ev==='-heal')addLog(cleanName(p[2])+' recovered health.')}else if(ev==='-status'){var sside=activeKey(p[2]),sm=findMon(sside,cleanName(p[2]));if(sm)sm.status=p[3]||'';addLog(cleanName(p[2])+' was afflicted with '+String(p[3]||'a status').toUpperCase()+'.')}else if(ev==='-curestatus'){var cside=activeKey(p[2]),cm=findMon(cside,cleanName(p[2]));if(cm)cm.status='';addLog(cleanName(p[2])+' was cured.')}else if(ev==='faint'){setHp(activeKey(p[2]),p[2],'0 fnt');addLog(cleanName(p[2])+' fainted.')}else if(ev==='-miss'){pushEvent('miss','MISS',cleanName(p[2])+' missed.');addLog(cleanName(p[2])+' missed.')}else if(ev==='-crit'){pushEvent('critical','CRITICAL HIT','A critical hit landed on '+cleanName(p[2])+'.');addLog('A critical hit landed on '+cleanName(p[2])+'.');$('arena').classList.remove('crit');void $('arena').offsetWidth;$('arena').classList.add('crit')}else if(ev==='-supereffective'){addLog('It was super effective.')}else if(ev==='-resisted'){addLog('It was not very effective.')}else if(ev==='-immune'){addLog('It had no effect.')}else if(ev==='-boost'||ev==='-unboost'||ev==='-setboost'){var bside=activeKey(p[2]),stat=p[3],amt=Number(p[4])||1;if(ev==='-unboost')amt=-amt;if(ev==='-setboost')state.boosts[bside][stat]=amt;else state.boosts[bside][stat]=(state.boosts[bside][stat]||0)+amt;var up=amt>0;pushEvent(up?'boost':'drop',(up?'+':'')+amt+' '+stat.toUpperCase(),cleanName(p[2])+'’s '+stat.toUpperCase()+' '+(up?'rose.':'fell.'));addLog(cleanName(p[2])+'’s '+stat.toUpperCase()+' '+(up?'rose.':'fell.'))}else if(ev==='-clearboost'){state.boosts[activeKey(p[2])]={}}else if(ev==='-start'&&effectLabel(p[3])==='Substitute'){var us=activeKey(p[2]);state.sub[us]=true;pushEvent('sub','SUB UP',cleanName(p[2])+' put up a substitute.');addLog(cleanName(p[2])+' put up a substitute.')}else if(ev==='-end'&&effectLabel(p[3])==='Substitute'){var ue=activeKey(p[2]);state.sub[ue]=false;pushEvent('sub','SUB BROKE',cleanName(p[2])+'’s substitute faded.');addLog(cleanName(p[2])+' lost its substitute.')}else if(ev==='-activate'&&effectLabel(p[3])==='Substitute'){pushEvent('sub','SUB BLOCK',cleanName(p[2])+'’s substitute took the hit.')}else if(ev==='-weather'){if(p[2]&&p[2]!=='none'){state.weather={id:toID(p[2]),label:effectLabel(p[2])};if(p.indexOf('[upkeep]')<0)addLog(effectLabel(p[2])+' began.')}else{state.weather=null;addLog('The weather cleared.')}}else if(ev==='-sidestart'||ev==='-sideend'){var hside=String(p[2]).indexOf('p1')>=0?'p1':'p2',hid=toID(effectLabel(p[3]));if(ev==='-sideend')delete state.hazards[hside][hid];else state.hazards[hside][hid]=(state.hazards[hside][hid]||0)+1;addLog(effectLabel(p[3])+(ev==='-sidestart'?' was set.':' disappeared.'))}else if(ev==='-ability'){var aside=activeKey(p[2]);state.revealed[aside].ability=effectLabel(p[3]);addLog(cleanName(p[2])+' revealed '+effectLabel(p[3])+'.')}else if(ev==='-item'||ev==='-enditem'){var iside=activeKey(p[2]);state.revealed[iside].item=effectLabel(p[3]);addLog(cleanName(p[2])+(ev==='-item'?' revealed ':' used ')+effectLabel(p[3])+'.')}else if(ev==='win'){state.ended=true;state.result=(toID(p[2])===player.id?'You won the spar.':'Dojo Bot takes this one.');state.busy=false;addLog(state.result)}else if(ev==='tie'){state.ended=true;state.result='The spar ends level.';state.busy=false;addLog(state.result)}render()}
-function applyRequest(req){if(!req)return;if(req.side&&req.side.pokemon){state.playerTeam=req.side.pokemon.map(function(m){var old=findMon('p1',cleanName(m.ident));return {name:cleanName(m.ident),details:m.details,condition:m.condition,active:!!m.active,item:m.item||old&&old.item||'',ability:m.ability||m.baseAbility||old&&old.ability||'',stats:m.stats||old&&old.stats||null,moves:m.moves||[],status:hpInfo(m.condition).status}});var a=state.playerTeam.find(function(m){return m.active});if(a)state.active.p1=a}if(req.forceSwitch)state.phase='switch';else if(req.wait)state.phase='wait';else state.phase='move';render()}
-function legalBotChoice(req){if(!req||req.wait)return '';var mons=req.side&&req.side.pokemon||[];if(req.forceSwitch||req.teamPreview){for(var i=0;i<mons.length;i++)if(!mons[i].active&&!hpInfo(mons[i].condition).fainted)return 'switch '+(i+1);return ''}var active=req.active&&req.active[0];if(!active)return '';var current=mons.find(function(m){return m.active}),low=current?hpInfo(current.condition).pct<34:false,viable=[];for(var j=0;j<mons.length;j++)if(!mons[j].active&&!hpInfo(mons[j].condition).fainted)viable.push(j);if(low&&viable.length&&Math.random()<.16)return 'switch '+(viable[Math.floor(Math.random()*viable.length)]+1);var best=-1,score=-1e9;for(var k=0;k<(active.moves||[]).length;k++){var opt=active.moves[k];if(opt.disabled||opt.pp===0)continue;var data=moveDex[toID(opt.id||opt.move)]||{},s=Number(data.basePower)||0;if((data.category||'Status')==='Status'){var id=toID(opt.id||opt.move);if(/recover|roost|softboiled|slackoff|wish|rest|synthesis|morningsun|moonlight/.test(id))s=low?120:18;else if(/swordsdance|nastyplot|calmmind|dragondance|bulkup|quiverdance/.test(id))s=state.turn<5?76:40;else s=38}else{if(typeof data.accuracy==='number')s*=data.accuracy/100;if(current&&current.details){var pd=pokeDex[spriteId(current.details)];if(pd&&pd.types&&pd.types.indexOf(data.type)>=0)s*=1.5}}s+=Math.random()*8;if(s>score){score=s;best=k}}if(best<0)return viable.length?'switch '+(viable[0]+1):'move 1';var suffix='';if(active.canMegaEvo)suffix=' mega';if(active.canZMove&&active.canZMove[best])suffix=' zmove';return 'move '+(best+1)+suffix}
+function handleBattleLine(line){if(!state||!line)return;var p=line.split('|'),ev=p[1]||'';if(ev==='init'){state.connected=true;state.busy=true;setConn('Live on Pokémon Showdown','live')}else if(ev==='request'){try{state.request=JSON.parse(line.slice(9));applyRequest(state.request)}catch(e){};state.busy=false}else if(ev==='turn'){state.turn=Number(p[2])||state.turn;state.events=[];state.busy=false}else if(ev==='switch'||ev==='drag'||ev==='replace'){var side=activeKey(p[2]),name=cleanName(p[2]),mon;if(side==='p1'){mon=findMon('p1',name)||{name:name,details:p[3],condition:p[4]};}else mon=ensureOpponent(name,p[3],p[4]);mon.name=name;mon.details=p[3];mon.condition=p[4];var _sl=state.doubles?activeSlot(p[2]):0;if(state.doubles){state.active[side][_sl]=mon;state.boosts[side][_sl]={};state.sub[side][_sl]=false;}else{state.active[side]=mon;state.boosts[side]={};state.sub[side]=false;}addLog((side==='p1'?'You sent out ':'Dojo Bot sent out ')+name+'.')}else if(ev==='move'){var mside=activeKey(p[2]),move=p[3]||'a move',data=moveDex[toID(move)]||{};state.lastCue={side:mside,move:move,type:data.type||'Normal',category:data.category||'Status'};addLog((mside==='p1'?'You':'Dojo Bot')+' used '+move+'.');showCue(state.lastCue)}else if(ev==='-damage'||ev==='-heal'){var dside=activeKey(p[2]);setHp(dside,p[2],p[3]);if(ev==='-heal')addLog(cleanName(p[2])+' recovered health.')}else if(ev==='-status'){var sside=activeKey(p[2]),sm=findMon(sside,cleanName(p[2]));if(sm)sm.status=p[3]||'';addLog(cleanName(p[2])+' was afflicted with '+String(p[3]||'a status').toUpperCase()+'.')}else if(ev==='-curestatus'){var cside=activeKey(p[2]),cm=findMon(cside,cleanName(p[2]));if(cm)cm.status='';addLog(cleanName(p[2])+' was cured.')}else if(ev==='faint'){setHp(activeKey(p[2]),p[2],'0 fnt');addLog(cleanName(p[2])+' fainted.')}else if(ev==='-miss'){pushEvent('miss','MISS',cleanName(p[2])+' missed.');addLog(cleanName(p[2])+' missed.')}else if(ev==='-crit'){pushEvent('critical','CRITICAL HIT','A critical hit landed on '+cleanName(p[2])+'.');addLog('A critical hit landed on '+cleanName(p[2])+'.');$('arena').classList.remove('crit');void $('arena').offsetWidth;$('arena').classList.add('crit')}else if(ev==='-supereffective'){addLog('It was super effective.')}else if(ev==='-resisted'){addLog('It was not very effective.')}else if(ev==='-immune'){addLog('It had no effect.')}else if(ev==='-boost'||ev==='-unboost'||ev==='-setboost'){var bside=activeKey(p[2]),bb=slotBoosts(bside,state.doubles?activeSlot(p[2]):0),stat=p[3],amt=Number(p[4])||1;if(ev==='-unboost')amt=-amt;if(ev==='-setboost')bb[stat]=amt;else bb[stat]=(bb[stat]||0)+amt;var up=amt>0;pushEvent(up?'boost':'drop',(up?'+':'')+amt+' '+stat.toUpperCase(),cleanName(p[2])+'’s '+stat.toUpperCase()+' '+(up?'rose.':'fell.'));addLog(cleanName(p[2])+'’s '+stat.toUpperCase()+' '+(up?'rose.':'fell.'))}else if(ev==='-clearboost'){var _cbs=activeKey(p[2]);if(state.doubles)state.boosts[_cbs][activeSlot(p[2])]={};else state.boosts[_cbs]={};}else if(ev==='-start'&&effectLabel(p[3])==='Substitute'){var us=activeKey(p[2]);slotSubSet(us,state.doubles?activeSlot(p[2]):0,true);pushEvent('sub','SUB UP',cleanName(p[2])+' put up a substitute.');addLog(cleanName(p[2])+' put up a substitute.')}else if(ev==='-end'&&effectLabel(p[3])==='Substitute'){var ue=activeKey(p[2]);slotSubSet(ue,state.doubles?activeSlot(p[2]):0,false);pushEvent('sub','SUB BROKE',cleanName(p[2])+'’s substitute faded.');addLog(cleanName(p[2])+' lost its substitute.')}else if(ev==='-activate'&&effectLabel(p[3])==='Substitute'){pushEvent('sub','SUB BLOCK',cleanName(p[2])+'’s substitute took the hit.')}else if(ev==='-weather'){if(p[2]&&p[2]!=='none'){state.weather={id:toID(p[2]),label:effectLabel(p[2])};if(p.indexOf('[upkeep]')<0)addLog(effectLabel(p[2])+' began.')}else{state.weather=null;addLog('The weather cleared.')}}else if(ev==='-sidestart'||ev==='-sideend'){var hside=String(p[2]).indexOf('p1')>=0?'p1':'p2',hid=toID(effectLabel(p[3]));if(ev==='-sideend')delete state.hazards[hside][hid];else state.hazards[hside][hid]=(state.hazards[hside][hid]||0)+1;addLog(effectLabel(p[3])+(ev==='-sidestart'?' was set.':' disappeared.'))}else if(ev==='-ability'){var aside=activeKey(p[2]);slotRevealed(aside,state.doubles?activeSlot(p[2]):0).ability=effectLabel(p[3]);addLog(cleanName(p[2])+' revealed '+effectLabel(p[3])+'.')}else if(ev==='-item'||ev==='-enditem'){var iside=activeKey(p[2]);slotRevealed(iside,state.doubles?activeSlot(p[2]):0).item=effectLabel(p[3]);addLog(cleanName(p[2])+(ev==='-item'?' revealed ':' used ')+effectLabel(p[3])+'.')}else if(ev==='win'){state.ended=true;state.result=(toID(p[2])===player.id?'You won the spar.':'Dojo Bot takes this one.');state.busy=false;addLog(state.result)}else if(ev==='tie'){state.ended=true;state.result='The spar ends level.';state.busy=false;addLog(state.result)}render()}
+function applyRequest(req){if(!req)return;if(req.side&&req.side.pokemon){state.playerTeam=req.side.pokemon.map(function(m){var old=findMon('p1',cleanName(m.ident));return {name:cleanName(m.ident),details:m.details,condition:m.condition,active:!!m.active,item:m.item||old&&old.item||'',ability:m.ability||m.baseAbility||old&&old.ability||'',stats:m.stats||old&&old.stats||null,moves:m.moves||[],status:hpInfo(m.condition).status}});if(!state.doubles){var a=state.playerTeam.find(function(m){return m.active});if(a)state.active.p1=a}}state.pending=[null,null];state.targeting=null;var _fs=req.forceSwitch,_needSw=state.doubles?(_fs&&(_fs[0]||_fs[1])):!!_fs;if(_needSw)state.phase='switch';else if(req.wait)state.phase='wait';else state.phase='move';render()}
+function legalBotChoice(req){
+if(!req||req.wait)return '';
+var mons=req.side&&req.side.pokemon||[];
+if(state.doubles){
+var _fs=req.forceSwitch;
+if(_fs&&(_fs[0]||_fs[1])){
+var parts=[],used={};
+for(var s=0;s<2;s++){
+if(_fs[s]){var pick=-1;for(var i=0;i<mons.length;i++){if(used[i])continue;if(!mons[i].active&&!hpInfo(mons[i].condition).fainted){pick=i;break;}}
+if(pick>=0){used[pick]=1;parts.push('switch '+(pick+1));}else parts.push('pass');}
+else parts.push('pass');
+}
+return parts.join(', ');
+}
+var out=[];
+for(var s2=0;s2<2;s2++)out.push(botSlotChoice(req,s2,mons));
+return out.join(', ');
+}
+if(req.forceSwitch||req.teamPreview){for(var i=0;i<mons.length;i++)if(!mons[i].active&&!hpInfo(mons[i].condition).fainted)return 'switch '+(i+1);return ''}var active=req.active&&req.active[0];if(!active)return '';var current=mons.find(function(m){return m.active}),low=current?hpInfo(current.condition).pct<34:false,viable=[];for(var j=0;j<mons.length;j++)if(!mons[j].active&&!hpInfo(mons[j].condition).fainted)viable.push(j);if(low&&viable.length&&Math.random()<.16)return 'switch '+(viable[Math.floor(Math.random()*viable.length)]+1);var best=-1,score=-1e9;for(var k=0;k<(active.moves||[]).length;k++){var opt=active.moves[k];if(opt.disabled||opt.pp===0)continue;var data=moveDex[toID(opt.id||opt.move)]||{},s=Number(data.basePower)||0;if((data.category||'Status')==='Status'){var id=toID(opt.id||opt.move);if(/recover|roost|softboiled|slackoff|wish|rest|synthesis|morningsun|moonlight/.test(id))s=low?120:18;else if(/swordsdance|nastyplot|calmmind|dragondance|bulkup|quiverdance/.test(id))s=state.turn<5?76:40;else s=38}else{if(typeof data.accuracy==='number')s*=data.accuracy/100;if(current&&current.details){var pd=pokeDex[spriteId(current.details)];if(pd&&pd.types&&pd.types.indexOf(data.type)>=0)s*=1.5}}s+=Math.random()*8;if(s>score){score=s;best=k}}if(best<0)return viable.length?'switch '+(viable[0]+1):'move 1';var suffix='';if(active.canMegaEvo)suffix=' mega';if(active.canZMove&&active.canZMove[best])suffix=' zmove';return 'move '+(best+1)+suffix
+}
+
+function botSlotChoice(req,s,mons){
+var a=req.active&&req.active[s];
+if(!a||!a.moves||!a.moves.length)return 'pass';
+var current=state.active.p2[s],low=current?hpInfo(current.condition).pct<34:false,viable=[];
+for(var j=0;j<mons.length;j++)if(!mons[j].active&&!hpInfo(mons[j].condition).fainted)viable.push(j);
+if(low&&viable.length&&Math.random()<.16)return 'switch '+(viable[Math.floor(Math.random()*viable.length)]+1);
+var best=-1,score=-1e9;
+for(var k=0;k<a.moves.length;k++){
+var opt=a.moves[k];
+if(opt.disabled||opt.pp===0)continue;
+var data=moveDex[toID(opt.id||opt.move)]||{},sc=Number(data.basePower)||0;
+if((data.category||'Status')==='Status'){
+var id=toID(opt.id||opt.move);
+if(/recover|roost|softboiled|slackoff|wish|rest|synthesis|morningsun|moonlight/.test(id))sc=low?120:18;
+else if(/swordsdance|nastyplot|calmmind|dragondance|bulkup|quiverdance/.test(id))sc=state.turn<5?76:40;
+else sc=38
+}
+else{
+if(typeof data.accuracy==='number')sc*=data.accuracy/100;
+if(current&&current.details){
+var pd=pokeDex[spriteId(current.details)];
+if(pd&&pd.types&&pd.types.indexOf(data.type)>=0)sc*=1.5
+}
+}
+sc+=Math.random()*8;
+if(sc>score){score=sc;best=k}
+}
+if(best<0)return viable.length?'switch '+(viable[0]+1):'move 1';
+var tl=dblTargetLoc(s,a.moves[best]);
+return 'move '+(best+1)+(tl?' '+tl:'')+eventSuffix(a,best)
+}
+function dblTargetLoc(s,opt){
+var t=opt&&opt.target;
+if(!CHOOSABLE_T[t])return '';
+if(t==='adjacentAlly'||t==='adjacentAllyOrSelf'){
+var ally=state.active.p2[1-s];
+if(ally&&!hpInfo(ally.condition).fainted)return '-'+(2-s);
+if(t==='adjacentAllyOrSelf')return '-'+(s+1);
+return ''
+}
+var fs=-1,fp=101;
+for(var f=0;f<2;f++){var fm=state.active.p1[f];if(!fm)continue;var h=hpInfo(fm.condition);if(h.fainted)continue;if(h.pct<fp){fp=h.pct;fs=f;}}
+if(fs<0)return '';
+return '+'+(fs+1)
+}
 function handleBotRequest(room,json,client){var req;try{req=JSON.parse(json)}catch(e){return}if(!req||req.wait||req.rqid===client.lastRqid)return;client.lastRqid=req.rqid;var choice=legalBotChoice(req);if(choice)setTimeout(function(){if(client.token===startToken)client.send(room+'|/choose '+choice+'|'+req.rqid)},420+Math.random()*420)}
 function choose(choice){if(!state||state.busy||state.ended||!state.request)return;state.busy=true;render();player.send(state.room+'|/choose '+choice+'|'+state.request.rqid)}
 function speedRange(details){var key=spriteId(details),d=pokeDex[key],base=d&&d.baseStats&&d.baseStats.spe,level=levelFrom(details);if(!base)return null;return {min:Math.floor((Math.floor((2*base*level)/100)+5)*.9),max:Math.floor((Math.floor(((2*base+94)*level)/100)+5)*1.1)}}
@@ -110,17 +215,119 @@ function monTypes(details){var d=pokeDex[spriteId(details)];return d&&d.types?d.
 function styleType(types){return 'style="--type:'+cssType(types[0])+'"'}
 function hpBar(pct){var color=pct>50?'#4f9b62':pct>20?'#d39b36':'#c75245';return '<div class="hp-track"><div class="hp-fill" style="width:'+pct+'%;background:'+color+'"></div></div>'}
 function statsPop(mon,side,types){if(side==='p2'){var range=speedRange(mon.details);return '<div class="stat-pop"><div class="pop-head"><b>'+esc(mon.name)+'</b><span>Lv. '+levelFrom(mon.details)+' estimate</span></div><div class="speed-range"><span>Possible Speed</span><b>'+(range?range.min+'–'+range.max:'—')+'</b></div><p class="pop-note">Natural range at this level. The exact set and moves stay hidden.</p></div>'}var h=hpInfo(mon.condition),s=mon.stats||{};return '<div class="stat-pop"><div class="pop-head"><b>'+esc(mon.name)+'</b><span>Lv. '+levelFrom(mon.details)+' battle stats</span></div><div class="stat-grid"><div><span>HP</span><b>'+h.cur+'/'+h.max+'</b></div><div><span>Attack</span><b>'+(s.atk||'—')+'</b></div><div><span>Defense</span><b>'+(s.def||'—')+'</b></div><div><span>Sp. Atk</span><b>'+(s.spa||'—')+'</b></div><div><span>Sp. Def</span><b>'+(s.spd||'—')+'</b></div><div><span>Speed</span><b>'+(s.spe||'—')+'</b></div></div></div>'}
-function statusHTML(mon,side){if(!mon)return '<div class="status">Waiting for a switch…</div>';var hp=hpInfo(mon.condition),types=monTypes(mon.details),boosts=state.boosts[side]||{},chips='';Object.keys(boosts).forEach(function(k){var v=boosts[k];if(v)chips+='<span class="boost '+(v>0?'up':'down')+'">'+(v>0?'+':'')+v+' '+esc(k.toUpperCase())+'</span>'});if(state.sub[side])chips='<span class="boost sub">Substitute</span>'+chips;var ability=side==='p1'?(mon.ability||''):state.revealed.p2.ability,item=side==='p1'?(mon.item||''):state.revealed.p2.item,range=speedRange(mon.details),speed=side==='p1'?(mon.stats&&mon.stats.spe||'—'):(range?range.min+'–'+range.max:'—');return '<div class="status" tabindex="0" '+styleType(types)+'><div class="status-top"><div style="min-width:0"><div class="mon-name">'+esc(mon.name)+'</div><div class="details"><span class="level">Lv. '+levelFrom(mon.details)+(hp.status?' · '+esc(hp.status.toUpperCase()):'')+'</span>'+types.map(function(t){return '<span class="type" style="--type:'+cssType(t)+'">'+esc(t)+'</span>'}).join('')+'</div></div><span class="side-tag">'+(side==='p1'?'YOU':'BOT')+'</span></div>'+hpBar(hp.pct)+'<div class="status-meta"><span>'+(side==='p1'?hp.cur+'/'+hp.max:hp.pct+'%')+'</span><span class="speed">SPE '+speed+'</span></div>'+((ability||item)?'<div class="loadout">'+(ability?'<span>ABILITY <b>'+esc(ability)+'</b></span>':'')+(item?'<span class="held">HELD <b>'+esc(item)+'</b></span>':'')+'</div>':'')+(chips?'<div class="boosts">'+chips+'</div>':'')+'<span class="inspect">Hover or tap for stats</span>'+statsPop(mon,side,types)+'</div>'}
-function spriteHTML(mon,side){if(!mon)return '<div class="visual"></div>';var types=monTypes(mon.details),id=spriteId(mon.details),base=side==='p1'?PS_LOGIN_HOST+'/sprites/gen5-back/':PS_LOGIN_HOST+'/sprites/gen5/',url=base+encodeURIComponent(id)+'.png',initial=esc(mon.name.slice(0,2).toUpperCase());return '<div class="visual '+(state.sub[side]?'has-sub':'')+'" '+styleType(types)+'><div class="mon-shadow"></div><img class="sprite" alt="'+esc(mon.name)+' battle sprite" data-sprite="'+esc(url)+'"><div class="fallback" aria-label="'+esc(mon.name)+'">'+initial+'</div>'+(state.sub[side]?'<div class="sub-doll">SUB</div>':'')+'</div>'}
+function statusHTML(mon,side,slot){slot=slot|0;if(!mon)return '<div class="status">Waiting for a switch…</div>';var hp=hpInfo(mon.condition),types=monTypes(mon.details),boosts=slotBoosts(side,slot)||{},chips='';Object.keys(boosts).forEach(function(k){var v=boosts[k];if(v)chips+='<span class="boost '+(v>0?'up':'down')+'">'+(v>0?'+':'')+v+' '+esc(k.toUpperCase())+'</span>'});if(slotSubGet(side,slot))chips='<span class="boost sub">Substitute</span>'+chips;var ability=side==='p1'?(mon.ability||''):slotRevealed('p2',slot).ability,item=side==='p1'?(mon.item||''):slotRevealed('p2',slot).item,range=speedRange(mon.details),speed=side==='p1'?(mon.stats&&mon.stats.spe||'—'):(range?range.min+'–'+range.max:'—');return '<div class="status" tabindex="0" '+styleType(types)+'><div class="status-top"><div style="min-width:0"><div class="mon-name">'+esc(mon.name)+'</div><div class="details"><span class="level">Lv. '+levelFrom(mon.details)+(hp.status?' · '+esc(hp.status.toUpperCase()):'')+'</span>'+types.map(function(t){return '<span class="type" style="--type:'+cssType(t)+'">'+esc(t)+'</span>'}).join('')+'</div></div><span class="side-tag">'+(side==='p1'?'YOU':'BOT')+'</span></div>'+hpBar(hp.pct)+'<div class="status-meta"><span>'+(side==='p1'?hp.cur+'/'+hp.max:hp.pct+'%')+'</span><span class="speed">SPE '+speed+'</span></div>'+((ability||item)?'<div class="loadout">'+(ability?'<span>ABILITY <b>'+esc(ability)+'</b></span>':'')+(item?'<span class="held">HELD <b>'+esc(item)+'</b></span>':'')+'</div>':'')+(chips?'<div class="boosts">'+chips+'</div>':'')+'<span class="inspect">Hover or tap for stats</span>'+statsPop(mon,side,types)+'</div>'}
+function spriteHTML(mon,side,slot){slot=slot|0;if(!mon)return '<div class="visual"></div>';var types=monTypes(mon.details),id=spriteId(mon.details),base=side==='p1'?PS_LOGIN_HOST+'/sprites/gen5-back/':PS_LOGIN_HOST+'/sprites/gen5/',url=base+encodeURIComponent(id)+'.png',initial=esc(mon.name.slice(0,2).toUpperCase());return '<div class="visual '+(slotSubGet(side,slot)?'has-sub':'')+'" '+styleType(types)+'><div class="mon-shadow"></div><img class="sprite" alt="'+esc(mon.name)+' battle sprite" data-sprite="'+esc(url)+'"><div class="fallback" aria-label="'+esc(mon.name)+'">'+initial+'</div>'+(slotSubGet(side,slot)?'<div class="sub-doll">SUB</div>':'')+'</div>'}
 function activeHTML(mon,side){return '<div class="side-grid">'+(side==='p1'?spriteHTML(mon,side)+statusHTML(mon,side):statusHTML(mon,side)+spriteHTML(mon,side))+'</div>'}
 function loadSprites(){var imgs=document.querySelectorAll('img[data-sprite]:not([data-loaded])');for(var i=0;i<imgs.length;i++)(function(img){img.setAttribute('data-loaded','1');fetch(img.getAttribute('data-sprite'),{mode:'cors'}).then(function(r){if(!r.ok)throw new Error();return r.blob()}).then(function(blob){var u=URL.createObjectURL(blob);spriteUrls.push(u);img.onload=function(){img.classList.add('loaded')};img.src=u}).catch(function(){img.remove()})})(imgs[i])}
 function pips(count){var out='';for(var i=0;i<6;i++)out+='<i class="pip '+(i<count?'alive':'')+'"></i>';return out}
 function hazardName(id){return {stealthrock:'Stealth Rock',spikes:'Spikes',toxicspikes:'Toxic Spikes',stickyweb:'Sticky Web'}[id]||id}
 function fieldHTML(){var w=state.weather?'<div class="weather"><i></i><b>'+esc(state.weather.label)+'</b></div>':'<div class="weather"><i style="border-color:var(--line);background:transparent"></i><span>Clear field</span></div>',rows='';[['p2','Their side'],['p1','Your side']].forEach(function(pair){var h=state.hazards[pair[0]],keys=Object.keys(h);if(keys.length)rows+='<div class="hazard-row"><span class="side-label">'+pair[1]+'</span>'+keys.map(function(k){return '<span class="hazard">'+esc(hazardName(k))+(h[k]>1?' ×'+h[k]:'')+'</span>'}).join('')+'</div>'});return w+'<div class="hazards">'+rows+'</div>'}
 function teamHTML(){return state.playerTeam.map(function(mon){var hp=hpInfo(mon.condition),types=monTypes(mon.details);return '<button class="slot '+(mon.active?'active ':'')+(hp.fainted?'fainted':'')+'" '+styleType(types)+'><span class="orb"><b>'+esc(mon.name.charAt(0))+'</b></span><span class="slot-copy"><span class="slot-name">'+esc(mon.name)+'</span>'+(mon.item?'<span class="slot-item">◆ '+esc(mon.item)+'</span>':'')+hpBar(hp.pct)+'</span>'+statsPop(mon,'p1',types)+'</button>'}).join('')}
-function controlsHTML(){if(state.ended)return '<div class="ended"><strong>'+esc(state.result)+'</strong><p>A full six-on-six spar. Start fresh whenever you like.</p></div>';var req=state.request;if(!req||req.wait)return '<div class="ended"><p>The dojo is settling the turn…</p></div>';var mons=req.side&&req.side.pokemon||[],switches=mons.map(function(m,i){return {m:m,i:i,h:hpInfo(m.condition)}}).filter(function(x){return !x.m.active&&!x.h.fainted});if(req.forceSwitch){return '<div class="switches">'+switches.map(function(x){var types=monTypes(x.m.details);return '<button class="switch" '+styleType(types)+' data-choice="switch '+(x.i+1)+'"><b>'+esc(cleanName(x.m.ident))+'</b><span class="mono">'+esc(x.m.condition)+'</span></button>'}).join('')+'</div>'}var active=req.active&&req.active[0],moves=active&&active.moves||[],moveHtml=moves.map(function(m,i){var data=moveDex[toID(m.id||m.move)]||{},type=data.type||'Normal',kind=data.category||'Move',power=data.basePower||0,suffix='',label='';if(active.canZMove&&active.canZMove[i]){suffix=' zmove';label='Z-MOVE'}else if(active.canMegaEvo){suffix=' mega';label='MEGA'}return '<button class="move" '+styleType([type])+' data-choice="move '+(i+1)+suffix+'" '+(m.disabled||m.pp===0?'disabled':'')+'><span class="move-top"><span>'+esc(m.move)+(label?'<em class="special">'+label+'</em>':'')+'</span><span class="type" style="--type:'+cssType(type)+'">'+esc(type)+'</span></span><span class="move-meta"><span>'+esc(kind)+(power?' · '+power+' power':'')+'</span><span>'+(m.pp==null?'—':m.pp)+'/'+(m.maxpp==null?'—':m.maxpp)+' PP</span></span></button>'}).join('');var sw='';if(switches.length&&!(active&&active.trapped))sw='<details class="switch-panel"><summary>Switch Pokémon</summary><div class="switches">'+switches.map(function(x){var types=monTypes(x.m.details);return '<button class="switch" '+styleType(types)+' data-choice="switch '+(x.i+1)+'"><b>'+esc(cleanName(x.m.ident))+'</b><span class="mono">'+esc(x.m.condition)+'</span></button>'}).join('')+'</div></details>';return '<div class="moves">'+moveHtml+'</div>'+sw}
+function controlsHTML(){if(state.ended)return '<div class="ended"><strong>'+esc(state.result)+'</strong><p>A full six-on-six spar. Start fresh whenever you like.</p></div>';var req=state.request;if(!req||req.wait)return '<div class="ended"><p>The dojo is settling the turn…</p></div>';var mons=req.side&&req.side.pokemon||[],switches=mons.map(function(m,i){return {m:m,i:i,h:hpInfo(m.condition)}}).filter(function(x){return !x.m.active&&!x.h.fainted});if(state.doubles)return doublesControlsHTML(req,mons,switches);
+if(req.forceSwitch){return '<div class="switches">'+switches.map(function(x){var types=monTypes(x.m.details);return '<button class="switch" '+styleType(types)+' data-choice="switch '+(x.i+1)+'"><b>'+esc(cleanName(x.m.ident))+'</b><span class="mono">'+esc(x.m.condition)+'</span></button>'}).join('')+'</div>'}var active=req.active&&req.active[0],moves=active&&active.moves||[],moveHtml=moves.map(function(m,i){var data=moveDex[toID(m.id||m.move)]||{},type=data.type||'Normal',kind=data.category||'Move',power=data.basePower||0,suffix='',label='';if(active.canZMove&&active.canZMove[i]){suffix=' zmove';label='Z-MOVE'}else if(active.canMegaEvo){suffix=' mega';label='MEGA'}return '<button class="move" '+styleType([type])+' data-choice="move '+(i+1)+suffix+'" '+(m.disabled||m.pp===0?'disabled':'')+'><span class="move-top"><span>'+esc(m.move)+(label?'<em class="special">'+label+'</em>':'')+'</span><span class="type" style="--type:'+cssType(type)+'">'+esc(type)+'</span></span><span class="move-meta"><span>'+esc(kind)+(power?' · '+power+' power':'')+'</span><span>'+(m.pp==null?'—':m.pp)+'/'+(m.maxpp==null?'—':m.maxpp)+' PP</span></span></button>'}).join('');var sw='';if(switches.length&&!(active&&active.trapped))sw='<details class="switch-panel"><summary>Switch Pokémon</summary><div class="switches">'+switches.map(function(x){var types=monTypes(x.m.details);return '<button class="switch" '+styleType(types)+' data-choice="switch '+(x.i+1)+'"><b>'+esc(cleanName(x.m.ident))+'</b><span class="mono">'+esc(x.m.condition)+'</span></button>'}).join('')+'</div></details>';return '<div class="moves">'+moveHtml+'</div>'+sw}
+function doublesControlsHTML(req,mons,switches){
+var fs=req.forceSwitch,needSw=!!(fs&&(fs[0]||fs[1]));
+if(needSw){
+return '<div class="dslots">'+[0,1].map(function(s){
+var mon=slotActive('p1',s),slotName='Slot '+'AB'.charAt(s)+' \u00b7 '+((mon&&mon.name)||'?');
+if(!fs[s])return '<div class="dslot idle"><div class="dslot-head"><b>'+esc(slotName)+'</b><span>holds position</span></div></div>';
+return '<div class="dslot"><div class="dslot-head"><b>'+esc(slotName)+'</b><span>'+(state.pending[s]?'\u2713 '+esc(pendingLabel(s)):'choose a replacement')+'</span></div><div class="switches">'+switches.map(function(x){
+var types=monTypes(x.m.details),taken=state.pending[1-s]==='switch '+(x.i+1);
+return '<button class="switch'+(state.pending[s]==='switch '+(x.i+1)?' picked':'')+'" '+styleType(types)+' data-dslot="'+s+'" data-sw="'+(x.i+1)+'"'+(taken?' disabled':'')+'><b>'+esc(cleanName(x.m.ident))+'</b><span class="mono">'+esc(x.m.condition)+'</span></button>'
+}).join('')+'</div></div>';
+}).join('')+'</div>';
+}
+return '<div class="dslots">'+[0,1].map(function(s){
+var mon=slotActive('p1',s),a=req.active&&req.active[s],moves=a&&a.moves||[],slotName='Slot '+'AB'.charAt(s)+' \u00b7 '+((mon&&mon.name)||'?');
+if(!moves.length)return '<div class="dslot idle"><div class="dslot-head"><b>'+esc(slotName)+'</b><span>resting this turn</span></div></div>';
+var moveHtml=moves.map(function(m,i){
+var data=moveDex[toID(m.id||m.move)]||{},type=data.type||'Normal',kind=data.category||'Move',power=data.basePower||0,suffix=eventSuffix(a,i),label='';
+if(a.canZMove&&a.canZMove[i]){label='Z-MOVE'}
+else if(a.canMegaEvo){label='MEGA'}
+var picked=!!(state.pending[s]&&state.pending[s].indexOf('move '+(i+1))===0);
+return '<button class="move'+(picked?' picked':'')+'" '+styleType([type])+' data-dslot="'+s+'" data-midx="'+i+'" '+(m.disabled||m.pp===0?'disabled':'')+'><span class="move-top"><span>'+esc(m.move)+(label?'<em class="special">'+label+'</em>':'')+'</span><span class="type" style="--type:'+cssType(type)+'">'+esc(type)+'</span></span><span class="move-meta"><span>'+esc(kind)+(power?' \u00b7 '+power+' power':'')+'</span><span>'+(m.pp==null?'\u2014':m.pp)+'/'+(m.maxpp==null?'\u2014':m.maxpp)+' PP</span></span></button>'
+}).join('');
+var tpick='';
+if(state.targeting&&state.targeting.slot===s){
+var topt=((req.active[state.targeting.slot]||{}).moves||[])[state.targeting.midx];
+tpick=targetButtons(s,topt);
+}
+var sw='';
+if(switches.length&&!(a&&a.trapped))sw='<details class="switch-panel"><summary>Switch Pok\u00e9mon</summary><div class="switches">'+switches.map(function(x){
+var types=monTypes(x.m.details),taken=state.pending[1-s]==='switch '+(x.i+1);
+return '<button class="switch'+(state.pending[s]==='switch '+(x.i+1)?' picked':'')+'" '+styleType(types)+' data-dslot="'+s+'" data-sw="'+(x.i+1)+'"'+(taken?' disabled':'')+'><b>'+esc(cleanName(x.m.ident))+'</b><span class="mono">'+esc(x.m.condition)+'</span></button>'
+}).join('')+'</div></details>';
+return '<div class="dslot"><div class="dslot-head"><b>'+esc(slotName)+'</b><span>'+(state.pending[s]?'\u2713 '+esc(pendingLabel(s)):'choose a move')+'</span></div><div class="moves">'+moveHtml+'</div>'+tpick+sw+'</div>';
+}).join('')+'</div>';
+}
+function pendingLabel(s){
+var c=state.pending[s];if(!c)return '';
+var m=/^switch (\d+)$/.exec(c);
+if(m){var mon=(state.request.side.pokemon||[])[Number(m[1])-1];return 'switch \u2192 '+cleanName(mon?mon.ident:'?');}
+var mv=/^move (\d+)/.exec(c);
+if(mv){var a=state.request.active[s],opt=a&&(a.moves||[])[Number(mv[1])-1];return (opt?opt.move:'move')+(c.indexOf(' mega')>=0?' (Mega)':'');}
+return c;
+}
+function targetButtons(s,opt){
+if(!needsTarget(opt))return '';
+var t=opt.target,out='';
+if(t==='adjacentAlly'||t==='adjacentAllyOrSelf'){
+var ally=slotActive('p1',1-s);
+if(ally&&!hpInfo(ally.condition).fainted)out+='<button class="tbtn" data-tpick="-'+(2-s)+'">\u2192 ally '+esc(ally.name)+'</button>';
+if(t==='adjacentAllyOrSelf')out+='<button class="tbtn" data-tpick="-'+(s+1)+'">\u2192 self</button>';
+}else{
+for(var f=0;f<2;f++){var fm=slotActive('p2',f);if(!fm||hpInfo(fm.condition).fainted)continue;out+='<button class="tbtn" data-tpick="+'+(f+1)+'">\u2192 '+esc(fm.name)+'</button>';}
+}
+return out?'<div class="tpick"><span>Target for <b>'+esc(opt.move)+'</b>:</span><span class="tbtns">'+out+'</span></div>':'';
+}
+function dPickMove(s,k){
+var req=state.request;if(!req||state.ended)return;
+var a=req.active&&req.active[s],opt=a&&(a.moves||[])[k];
+if(!opt||opt.disabled||opt.pp===0)return;
+if(needsTarget(opt)){state.targeting={slot:s,midx:k};state.pending[s]=null;}
+else{state.pending[s]='move '+(k+1)+eventSuffix(a,k);if(state.targeting&&state.targeting.slot===s)state.targeting=null;}
+render();maybeSendDoubles();
+}
+function dPickTarget(loc){
+var t=state.targeting;if(!t||!state.request)return;
+var a=state.request.active[t.slot];
+state.pending[t.slot]='move '+(t.midx+1)+(loc?' '+loc:'')+eventSuffix(a,t.midx);
+state.targeting=null;render();maybeSendDoubles();
+}
+function dPickSwitch(s,teamIdx){
+if(!state.request||state.ended)return;
+state.pending[s]='switch '+teamIdx;render();maybeSendDoubles();
+}
+function maybeSendDoubles(){
+var req=state.request;if(!req||state.ended)return;
+var fs=req.forceSwitch,needSw=!!(fs&&(fs[0]||fs[1]));
+if(needSw){
+for(var s=0;s<2;s++)if(fs[s]&&!state.pending[s])return;
+var parts=[];for(var q=0;q<2;q++)parts.push(state.pending[q]||'pass');
+state.pending=[null,null];state.targeting=null;choose(parts.join(', '));
+}else{
+if(state.targeting)return;
+var parts2=[];
+for(var q2=0;q2<2;q2++){
+var aq=req.active&&req.active[q2],needsChoice=!!(aq&&aq.moves&&aq.moves.length);
+if(needsChoice&&!state.pending[q2])return;
+parts2.push(state.pending[q2]||'pass');
+}
+state.pending=[null,null];choose(parts2.join(', '));
+}
+}
 function renderEvents(){if(!state)return;$('events').innerHTML=state.events.map(function(e){return '<div class="event '+esc(e.kind)+'"><b>'+esc(e.label)+'</b><span>'+esc(e.text)+'</span></div>'}).join('')}
-function render(){if(!state)return;var y=state.playerTeam.filter(function(m){return !hpInfo(m.condition).fainted}).length||6,b=6-state.opponents.filter(function(m){return hpInfo(m.condition).fainted}).length;$('youCount').textContent=y+' left';$('botCount').textContent=b+' left';$('youPips').innerHTML=pips(y);$('botPips').innerHTML=pips(b);$('fieldbar').innerHTML=fieldHTML();$('arenaTurn').textContent=state.turn;$('controlTurn').textContent='TURN '+state.turn;$('logTurn').textContent='TURN '+state.turn;$('youActive').innerHTML=activeHTML(state.active.p1,'p1');$('botActive').innerHTML=activeHTML(state.active.p2,'p2');$('team').innerHTML=teamHTML();$('choices').innerHTML=controlsHTML();$('busy').classList.toggle('hidden',!state.busy);$('busy').querySelector('span').textContent=state.room?'Settling turn':'Opening the mat';$('logList').innerHTML=state.log.map(function(x){return '<li><span>'+(x.turn||'·')+'</span><p>'+esc(x.text)+'</p></li>'}).join('');renderEvents();var choices=document.querySelectorAll('[data-choice]');for(var i=0;i<choices.length;i++)choices[i].onclick=function(){choose(this.getAttribute('data-choice'))};var inspectors=document.querySelectorAll('.status,.slot');for(var j=0;j<inspectors.length;j++)inspectors[j].onclick=function(e){if(e.target.closest('[data-choice]'))return;this.classList.toggle('open')};loadSprites();var log=$('logList').parentNode;log.scrollTop=log.scrollHeight}
+function dactiveHTML(side){
+return '<div class="dpair">'+[0,1].map(function(s){
+var mon=slotActive(side,s);
+return '<div class="dmon"><div class="side-grid">'+(side==='p1'?spriteHTML(mon,side,s)+statusHTML(mon,side,s):statusHTML(mon,side,s)+spriteHTML(mon,side,s))+'</div></div>';
+}).join('')+'</div>';
+}
+function render(){if(!state)return;var y=state.playerTeam.filter(function(m){return !hpInfo(m.condition).fainted}).length||6,b=6-state.opponents.filter(function(m){return hpInfo(m.condition).fainted}).length;$('youCount').textContent=y+' left';$('botCount').textContent=b+' left';$('youPips').innerHTML=pips(y);$('botPips').innerHTML=pips(b);$('fieldbar').innerHTML=fieldHTML();$('arenaTurn').textContent=state.turn;
+$('arena').classList.toggle('doubles',!!state.doubles);$('controlTurn').textContent='TURN '+state.turn;$('logTurn').textContent='TURN '+state.turn;$('youActive').innerHTML=state.doubles?dactiveHTML('p1'):activeHTML(state.active.p1,'p1');$('botActive').innerHTML=state.doubles?dactiveHTML('p2'):activeHTML(state.active.p2,'p2');$('team').innerHTML=teamHTML();$('choices').innerHTML=controlsHTML();$('busy').classList.toggle('hidden',!state.busy);$('busy').querySelector('span').textContent=state.room?'Settling turn':'Opening the mat';$('logList').innerHTML=state.log.map(function(x){return '<li><span>'+(x.turn||'·')+'</span><p>'+esc(x.text)+'</p></li>'}).join('');renderEvents();var choices=document.querySelectorAll('[data-choice]');for(var i=0;i<choices.length;i++)choices[i].onclick=function(){choose(this.getAttribute('data-choice'))};
+var dmb=document.querySelectorAll('[data-dslot][data-midx]');for(var k1=0;k1<dmb.length;k1++)dmb[k1].onclick=function(){dPickMove(Number(this.getAttribute('data-dslot')),Number(this.getAttribute('data-midx')))};
+var dsb=document.querySelectorAll('[data-dslot][data-sw]');for(var k2=0;k2<dsb.length;k2++)dsb[k2].onclick=function(){if(this.disabled)return;dPickSwitch(Number(this.getAttribute('data-dslot')),this.getAttribute('data-sw'))};
+var tpb=document.querySelectorAll('[data-tpick]');for(var k3=0;k3<tpb.length;k3++)tpb[k3].onclick=function(){dPickTarget(this.getAttribute('data-tpick'))};var inspectors=document.querySelectorAll('.status,.slot');for(var j=0;j<inspectors.length;j++)inspectors[j].onclick=function(e){if(e.target.closest('[data-choice]'))return;this.classList.toggle('open')};loadSprites();var log=$('logList').parentNode;log.scrollTop=log.scrollHeight}
 function showCue(c){var host=$('cueHost');host.innerHTML='<div class="cue" style="--type:'+cssType(c.type)+'"><small>'+(c.side==='p1'?'You':'Dojo Bot')+'</small><strong>'+esc(c.move)+'</strong><i></i></div>';setTimeout(function(){host.innerHTML=''},760)}
 function downloadSelf(){var html='<!doctype html>\n'+document.documentElement.outerHTML;var blob=new Blob([html],{type:'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='showdown-bot-dojo.html';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},1000)}
 $('startBtn').onclick=startBattle;$('newBtn').onclick=function(){$('battle').classList.add('hidden');$('start').classList.remove('hidden');$('startBtn').disabled=false;$('startBtn').textContent='Start a battle';if(player)player.close();if(bot)bot.close();startToken++;setConn('Ready · internet connection required','')};$('downloadBtn').onclick=downloadSelf;$('aboutBtn').onclick=function(){$('about').classList.remove('hidden')};$('closeAbout').onclick=function(){$('about').classList.add('hidden')};$('about').onclick=function(e){if(e.target===$('about'))$('about').classList.add('hidden')};document.addEventListener('keydown',function(e){if(e.key==='Escape')$('about').classList.add('hidden')});
