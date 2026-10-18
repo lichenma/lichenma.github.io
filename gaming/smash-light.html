@@ -47,7 +47,7 @@
 <script>
 "use strict";
 /* ============================================================
-   SMASH LIGHT v0 — a tiny Smash-style platform fighter
+   SMASH LIGHT v0.1 — a tiny Smash-style platform fighter
    Plain JS + canvas. No assets, no build step.
    ============================================================ */
 const cvs = document.getElementById("game");
@@ -98,9 +98,9 @@ const CHARS = {
   },
   shade: {
     name:"Shade", color:"#5b5bd6", dark:"#32327a", accent:"#9be7ff", skin:"#e8d9c0",
-    speed:378, weight:1.07, jumpV:815,
+    speed:378, weight:1.07, jumpV:840, airJump:1.0,
     jab:{ dmg:6, base:245, scale:3.0, range:56, cool:0.24 },
-    specialName:"Dash Strike",
+    specialName:"Lightning Ball",
   }
 };
 
@@ -116,7 +116,7 @@ function makeFighter(kind, x, face){
     kind, cfg:c, x, y:STAGE.top, vx:0, vy:0, face,
     w:30, h:56, pct:0, stocks:3,
     onGround:false, jumps:2, runPhase:0, landSquash:0,
-    atkT:0, atkCool:0, specCool:0, dashT:0, dashHitDone:false,
+    atkT:0, atkCool:0, specCool:0,
     hitstun:0, flash:0, invuln:0, shield:false,
     respawnT:0, dead:false, dropT:0, ff:false,
     input:{ left:false,right:false,down:false,jump:false,jumpP:false,
@@ -207,7 +207,6 @@ function botThink(dt){
     // recovery: head for stage centre, jump when low
     bot.dir = Math.sign(480 - b.x) || 1;
     if(b.y > STAGE.top - 30 && b.vy > -60) bot.jumpQ = true;
-    if(b.kind==="shade" && adx>120 && Math.random()<0.5) bot.specQ = true; // dash back
     return;
   }
   if(Math.random()<0.12){ bot.dir=0; return; }          // chill pause
@@ -221,8 +220,8 @@ function botThink(dt){
   if(b.kind==="ember" && adx>=180 && adx<=540 && Math.abs(dy)<70 && Math.random()<0.45){
     b.face = Math.sign(dx)||1; bot.specQ=true; bot.dir=0; return;   // fire fist from range
   }
-  if(b.kind==="shade" && adx>=130 && adx<=300 && Math.abs(dy)<60 && Math.random()<0.35){
-    bot.specQ=true; return;                                          // dash strike in
+  if(b.kind==="shade" && adx>=180 && adx<=560 && Math.abs(dy)<70 && Math.random()<0.40){
+    b.face = Math.sign(dx)||1; bot.specQ=true; bot.dir=0; return;   // lightning ball from range
   }
   bot.dir = Math.sign(dx)||1;                                        // approach
   if(dy < -70 && Math.random()<0.4) bot.jumpQ=true;                  // chase upward
@@ -284,19 +283,7 @@ function updateFighter(f, dt){
   if(stunned) f.hitstun-=dt;
   f.shield = !stunned && inp.shield && f.onGround;
 
-  // --- dash strike state (Shade special) ---
-  if(f.dashT>0){
-    f.dashT-=dt;
-    f.vy = Math.min(f.vy, 60);                       // hover during dash
-    if(!f.dashHitDone){
-      const box={ x1:Math.min(f.x,f.x+f.face*44)-4, x2:Math.max(f.x,f.x+f.face*44)+4,
-                  y1:f.y-54, y2:f.y-6 };
-      const o=foe(f);
-      if(bodyHit(o,box)){ applyHit(f,o,9,330,3.6,32); f.dashHitDone=true; }
-    }
-  }
-
-  if(!stunned && f.dashT<=0){
+  if(!stunned){
     // --- horizontal movement ---
     const sp = cfg.speed;
     if(inp.left && !f.shield){ f.vx = -sp; f.face=-1; }
@@ -307,7 +294,7 @@ function updateFighter(f, dt){
     // --- jumping ---
     if(inp.jumpP){
       if(f.onGround){ f.vy=-cfg.jumpV; f.onGround=false; f.jumps=1; blip(520,0.05,"sine",0.03); }
-      else if(f.jumps>0){ f.vy=-cfg.jumpV*0.92; f.jumps--; spawnHit(f.x,f.y+2,"#ffffff",5,60); }
+      else if(f.jumps>0){ f.vy=-cfg.jumpV*(cfg.airJump||0.92); f.jumps--; spawnHit(f.x,f.y+2,"#ffffff",5,60); }
     }
     // --- drop through platforms / fast fall ---
     if(inp.down && f.onGround && f.standingPlat && f.standingPlat.y<STAGE.top){ f.dropT=0.22; f.onGround=false; f.y+=3; }
@@ -325,30 +312,34 @@ function updateFighter(f, dt){
       if(f.kind==="ember"){
         f.specCool=0.55;
         projectiles.push({ x:f.x+f.face*26, y:f.y-32, vx:f.face*540, owner:f,
-                           life:1.15, r:15, t:0 });
+                           life:1.15, r:15, t:0, kind:"ember",
+                           dmg:8, base:300, scale:3.4, ang:22 });
         f.vx -= f.face*40;                            // tiny recoil
         blip(180,0.12,"sawtooth",0.045);
       } else {
-        f.specCool=0.72; f.dashT=0.16; f.dashHitDone=false;
-        f.vx=f.face*790; f.vy=Math.min(f.vy,0);
-        blip(700,0.08,"sine",0.04);
+        f.specCool=0.5;
+        projectiles.push({ x:f.x+f.face*26, y:f.y-32, vx:f.face*780, owner:f,
+                           life:0.95, r:11, t:0, kind:"shade",
+                           dmg:6, base:235, scale:2.8, ang:16 });
+        blip(880,0.09,"square",0.04);
       }
     }
   }
   if(f.atkT>0) f.atkT-=dt;
 
   // --- physics ---
-  f.vy += GRAV*dt*(f.dashT>0?0.25:1);
+  f.vy += GRAV*dt;
   if(f.ff) f.vy=Math.min(Math.max(f.vy,FASTFALL), FASTFALL+400);
   else f.vy=Math.min(f.vy, MAXFALL);
   const prevBottom=f.y;
   f.x += f.vx*dt; f.y += f.vy*dt;
 
-  // --- platform collision (one-way) ---
+  // --- platform collision (one-way sides; main platform always solid) ---
   const wasGround=f.onGround; f.onGround=false; f.standingPlat=null;
-  if(f.vy>=0 && f.dropT<=0){
+  if(f.vy>=0){
     const plats = respawnPlatT>0 ? PLATS.concat([RESP_PLAT]) : PLATS;
     for(const p of plats){
+      if(p!==PLATS[0] && f.dropT>0) continue;   // drop-through skips one-way platforms only — never the main platform
       if(f.x>p.x-8 && f.x<p.x+p.w+8 && prevBottom<=p.y+1 && f.y>=p.y){
         f.y=p.y; f.vy=0; f.onGround=true; f.standingPlat=p; break;
       }
@@ -385,13 +376,17 @@ function doKO(f){
 function updateProjectiles(dt){
   for(const pr of projectiles){
     pr.t+=dt; pr.life-=dt; pr.x+=pr.vx*dt;
-    if(Math.random()<0.8)
+    if(Math.random()<0.8){
+      const ec = pr.kind==="shade";
       particles.push({x:pr.x-Math.sign(pr.vx)*10, y:pr.y+(Math.random()*14-7),
-        vx:-pr.vx*0.15, vy:-30-Math.random()*40, life:0.3, t:0, r:3+Math.random()*3,
-        color:Math.random()<0.5?"#ff9a3c":"#ffd23e"});
+        vx:-pr.vx*0.15, vy: ec ? (Math.random()*90-45) : -30-Math.random()*40,
+        life:0.3, t:0, r: ec ? 2+Math.random()*2 : 3+Math.random()*3,
+        color: ec ? (Math.random()<0.5?"#9be7ff":"#e8fbff")
+                  : (Math.random()<0.5?"#ff9a3c":"#ffd23e")});
+    }
     const o=foe(pr.owner);
     if(!o.dead && o.invuln<=0 && Math.abs(o.x-pr.x)<pr.r+13 && o.y-56<pr.y+pr.r && o.y>pr.y-pr.r){
-      applyHit({face:Math.sign(pr.vx), kind:pr.owner.kind}, o, 8, 300, 3.4, 22);
+      applyHit({face:Math.sign(pr.vx), kind:pr.owner.kind}, o, pr.dmg, pr.base, pr.scale, pr.ang);
       pr.life=0;
     }
     if(pr.x<-60||pr.x>W+60) pr.life=0;
@@ -508,10 +503,6 @@ function drawFighter(f,t){
       ctx.strokeStyle=cfg.accent; ctx.lineWidth=3.5;
       ctx.beginPath(); ctx.arc(26,-40+bob*0.3,15,-0.7,0.9); ctx.stroke();
     }
-  } else if(f.dashT>0){
-    ctx.moveTo(8,-44+bob*0.3); ctx.lineTo(26,-38+bob*0.3); ctx.stroke();
-    ctx.strokeStyle=cfg.accent; ctx.lineWidth=3;
-    ctx.beginPath(); ctx.moveTo(26,-38+bob*0.3); ctx.lineTo(44,-38+bob*0.3); ctx.stroke();
   } else {
     ctx.moveTo(8,-44+bob*0.3); ctx.lineTo(15,-31+bob*0.3); ctx.stroke();
   }
@@ -534,6 +525,27 @@ function drawFighter(f,t){
 }
 function drawProjectiles(){
   for(const pr of projectiles){
+    if(pr.kind==="shade"){
+      // lightning ball: glowing electric orb with crackling spark arcs
+      ctx.save(); ctx.translate(pr.x,pr.y);
+      const pulse=1+Math.sin(pr.t*46)*0.15;
+      ctx.fillStyle="rgba(155,231,255,0.35)";
+      ctx.beginPath(); ctx.arc(0,0,16*pulse,0,7); ctx.fill();
+      ctx.fillStyle="#6fd3ff";
+      ctx.beginPath(); ctx.arc(0,0,10.5*pulse,0,7); ctx.fill();
+      ctx.fillStyle="#ffffff";
+      ctx.beginPath(); ctx.arc(0,0,5.5,0,7); ctx.fill();
+      ctx.strokeStyle="#cff6ff"; ctx.lineWidth=1.8;
+      for(let i=0;i<3;i++){
+        const a=pr.t*22+i*2.1, r1=12, r2=17+Math.sin(pr.t*40+i)*3;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a)*r1, Math.sin(a)*r1);
+        ctx.lineTo(Math.cos(a+0.5)*r2, Math.sin(a+0.5)*r2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      continue;
+    }
     ctx.save(); ctx.translate(pr.x,pr.y); ctx.scale(Math.sign(pr.vx),1);
     const flick=1+Math.sin(pr.t*40)*0.12;
     ctx.fillStyle="#ff7b2e";
