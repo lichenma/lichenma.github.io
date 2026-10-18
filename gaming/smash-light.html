@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smash Light</title>
+<style>
+  :root{ color-scheme: light; }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    background:linear-gradient(180deg,#bfe3ff 0%,#dff2ff 55%,#fdf3d8 100%);
+    font-family:ui-rounded,"Segoe UI",system-ui,-apple-system,sans-serif; color:#274b63;
+    padding:18px 10px 26px;
+  }
+  h1{ margin:2px 0 4px; font-size:34px; letter-spacing:.5px; color:#1d5f8a;
+      text-shadow:0 2px 0 #ffffffaa; }
+  .sub{ margin:0 0 12px; font-size:14px; color:#4a7a99; }
+  #wrap{ width:min(960px,96vw); }
+  canvas{
+    width:100%; height:auto; display:block; border-radius:14px;
+    box-shadow:0 14px 34px rgba(39,75,99,.28), 0 2px 0 #ffffff inset;
+    background:#aedcff;
+  }
+  .controls{
+    margin-top:12px; text-align:center; font-size:13.5px; line-height:1.65; color:#33617f;
+    background:#ffffff90; border:1px solid #ffffff; border-radius:10px; padding:8px 12px;
+  }
+  .controls b{ color:#1d5f8a; }
+  kbd{
+    background:#fff; border:1px solid #b9d4e6; border-bottom-width:2px; border-radius:5px;
+    padding:0 5px; font-family:inherit; font-size:12.5px;
+  }
+</style>
+</head>
+<body>
+  <h1>Smash Light</h1>
+  <p class="sub">A tiny home-cooked platform fighter. Rack up %, launch them past the blast zone.</p>
+  <div id="wrap"><canvas id="game" width="960" height="600"></canvas></div>
+  <div class="controls">
+    <b>You are Ember</b> (press <kbd>2</kbd> + <kbd>R</kbd> to play as Shade instead) &nbsp;·&nbsp;
+    <kbd>A</kbd>/<kbd>D</kbd> move · <kbd>W</kbd> jump (×2) · <kbd>S</kbd> fast-fall / drop · <kbd>J</kbd> attack ·
+    <kbd>K</kbd> special · <kbd>L</kbd> shield · <kbd>R</kbd> restart<br>
+    <b>Gamepad:</b> stick / D-pad move · <b>A</b> jump · <b>X</b> attack · <b>B</b> special · <b>RB</b> shield
+  </div>
+
+<script>
+"use strict";
+/* ============================================================
+   SMASH LIGHT v0 — a tiny Smash-style platform fighter
+   Plain JS + canvas. No assets, no build step.
+   ============================================================ */
+const cvs = document.getElementById("game");
+const ctx = cvs.getContext("2d");
+const W = 960, H = 600;
+
+/* ---------- stage (Battlefield layout) ---------- */
+const STAGE = { x:180, w:600, top:432 };                 // main platform
+const PLATS = [
+  { x:STAGE.x,        y:STAGE.top, w:STAGE.w },          // main
+  { x:252, y:332, w:170 },                                // left
+  { x:538, y:332, w:170 },                                // right
+  { x:395, y:238, w:170 },                                // top
+];
+const BLAST = { left:-150, right:W+150, top:-190, bottom:H+130 };
+
+/* ---------- tuning ---------- */
+const GRAV = 2050, MAXFALL = 940, FASTFALL = 1500;
+
+/* ---------- audio (tiny synth, init on first gesture) ---------- */
+let AC = null;
+function audio(){ if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(AC && AC.state==="suspended") AC.resume(); }
+function blip(freq, dur, type, vol){
+  if(!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type||"square"; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol||0.06, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + dur);
+  o.connect(g).connect(AC.destination); o.start(); o.stop(AC.currentTime + dur);
+}
+function noiseBurst(dur, vol){
+  if(!AC) return;
+  const len = Math.floor(AC.sampleRate*dur), buf = AC.createBuffer(1,len,AC.sampleRate),
+        d = buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+  const s = AC.createBufferSource(), g = AC.createGain();
+  s.buffer=buf; g.gain.value=vol||0.12; s.connect(g).connect(AC.destination); s.start();
+}
+
+/* ---------- fighters ---------- */
+const CHARS = {
+  ember: {
+    name:"Ember", color:"#ff7847", dark:"#c7431f", accent:"#ffd23e", skin:"#ffd9b3",
+    speed:300, weight:0.95, jumpV:835,
+    jab:{ dmg:7, base:265, scale:3.1, range:52, cool:0.30 },
+    specialName:"Fire Fist",
+  },
+  shade: {
+    name:"Shade", color:"#5b5bd6", dark:"#32327a", accent:"#9be7ff", skin:"#e8d9c0",
+    speed:378, weight:1.07, jumpV:815,
+    jab:{ dmg:6, base:245, scale:3.0, range:56, cool:0.24 },
+    specialName:"Dash Strike",
+  }
+};
+
+let particles = [], projectiles = [], floaters = [];
+let shake = 0, hitstop = 0, respawnPlatT = 0;
+const RESP_PLAT = { x:430, y:196, w:100 };
+let matchOver = false, winner = null;
+let playerChar = "ember";
+
+function makeFighter(kind, x, face){
+  const c = CHARS[kind];
+  return {
+    kind, cfg:c, x, y:STAGE.top, vx:0, vy:0, face,
+    w:30, h:56, pct:0, stocks:3,
+    onGround:false, jumps:2, runPhase:0, landSquash:0,
+    atkT:0, atkCool:0, specCool:0, dashT:0, dashHitDone:false,
+    hitstun:0, flash:0, invuln:0, shield:false,
+    respawnT:0, dead:false, dropT:0, ff:false,
+    input:{ left:false,right:false,down:false,jump:false,jumpP:false,
+            light:false,lightP:false,special:false,specialP:false,shield:false },
+  };
+}
+let P1, CPU;
+function resetMatch(){
+  const other = playerChar==="ember" ? "shade" : "ember";
+  P1  = makeFighter(playerChar, 350,  1);
+  CPU = makeFighter(other,      610, -1);
+  particles=[]; projectiles=[]; floaters=[];
+  shake=0; hitstop=0; matchOver=false; winner=null;
+  botReset();
+}
+function fighters(){ return [P1, CPU]; }
+function foe(f){ return f===P1 ? CPU : P1; }
+
+/* ---------- input: keyboard ---------- */
+const keys = {};
+addEventListener("keydown", e=>{
+  audio();
+  if(["KeyA","KeyD","KeyW","KeyS","KeyJ","KeyK","KeyL","Space"].includes(e.code)) e.preventDefault();
+  if(e.code==="KeyR"){ resetMatch(); return; }
+  if(e.code==="Digit1"){ playerChar="ember"; }
+  if(e.code==="Digit2"){ playerChar="shade"; }
+  keys[e.code]=true;
+});
+addEventListener("keyup", e=>{ keys[e.code]=false; });
+
+/* ---------- input: gamepad ---------- */
+const padPrev = {};
+function readPad(f){
+  const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp=null; for(const g of gps){ if(g && g.connected){ gp=g; break; } }
+  const inp = f.input;
+  if(!gp) return;
+  const ax = gp.axes[0]||0;
+  const btn = i=> !!(gp.buttons[i] && gp.buttons[i].pressed);
+  const edge = (name,down)=>{ const was=padPrev[name]||false; padPrev[name]=down; return down && !was; };
+  if(ax<-0.35 || btn(14)) inp.left=true;
+  if(ax> 0.35 || btn(15)) inp.right=true;
+  if((gp.axes[1]||0)>0.55 || btn(13)) inp.down=true;
+  const j = btn(0)||btn(12);
+  if(edge("jump",j)) inp.jumpP=true;
+  inp.jump = j;
+  if(edge("light",btn(2))) inp.lightP=true;
+  if(edge("spec", btn(1))) inp.specialP=true;
+  inp.shield = btn(5)||btn(7);
+}
+function readKeyboard(f){
+  const inp=f.input;
+  inp.left=!!keys["KeyA"]; inp.right=!!keys["KeyD"]; inp.down=!!keys["KeyS"];
+  inp.jump=!!keys["KeyW"];
+  inp.shield=!!keys["KeyL"];
+}
+let kbPrev={};
+function kbEdges(f){
+  const inp=f.input;
+  const cur={ jump:!!keys["KeyW"], light:!!keys["KeyJ"], spec:!!keys["KeyK"] };
+  inp.jumpP    = cur.jump  && !kbPrev.jump;
+  inp.lightP   = cur.light && !kbPrev.light;
+  inp.specialP = cur.spec  && !kbPrev.spec;
+  kbPrev=cur;
+}
+
+/* ---------- CPU bot (chill heuristic) ---------- */
+let bot = { dir:0, think:0, shieldT:0, jumpQ:false, specQ:false, lightQ:false };
+function botReset(){ bot={ dir:0, think:0, shieldT:0, jumpQ:false, specQ:false, lightQ:false }; }
+function botThink(dt){
+  const b=CPU, p=P1, inp=b.input;
+  bot.think-=dt;
+  // continuous: movement direction set on think ticks
+  if(bot.shieldT>0){ bot.shieldT-=dt; inp.shield = bot.shieldT>0; } else inp.shield=false;
+  inp.left  = bot.dir<0; inp.right = bot.dir>0;
+  inp.down=false;
+  inp.jumpP = bot.jumpQ;  bot.jumpQ=false;
+  inp.lightP = bot.lightQ; bot.lightQ=false;
+  inp.specialP = bot.specQ; bot.specQ=false;
+  inp.jump = inp.jumpP; inp.light=false; inp.special=false;
+
+  if(bot.think>0) return;
+  bot.think = 0.16 + Math.random()*0.10;               // human-ish reaction delay
+  const dx = p.x - b.x, adx = Math.abs(dx), dy = p.y - b.y;
+  const offstage = (b.x < STAGE.x-6 || b.x > STAGE.x+STAGE.w+6 || b.y > STAGE.top+24);
+
+  if(offstage || b.y > STAGE.top + 10 && (b.x<STAGE.x || b.x>STAGE.x+STAGE.w)){
+    // recovery: head for stage centre, jump when low
+    bot.dir = Math.sign(480 - b.x) || 1;
+    if(b.y > STAGE.top - 30 && b.vy > -60) bot.jumpQ = true;
+    if(b.kind==="shade" && adx>120 && Math.random()<0.5) bot.specQ = true; // dash back
+    return;
+  }
+  if(Math.random()<0.12){ bot.dir=0; return; }          // chill pause
+  if(adx < 78 && Math.abs(dy) < 60){                    // in range
+    const r=Math.random();
+    if(r<0.55) bot.lightQ=true;
+    else if(r<0.68){ bot.shieldT=0.3; bot.dir=0; }
+    else bot.dir = Math.sign(dx);
+    return;
+  }
+  if(b.kind==="ember" && adx>=180 && adx<=540 && Math.abs(dy)<70 && Math.random()<0.45){
+    b.face = Math.sign(dx)||1; bot.specQ=true; bot.dir=0; return;   // fire fist from range
+  }
+  if(b.kind==="shade" && adx>=130 && adx<=300 && Math.abs(dy)<60 && Math.random()<0.35){
+    bot.specQ=true; return;                                          // dash strike in
+  }
+  bot.dir = Math.sign(dx)||1;                                        // approach
+  if(dy < -70 && Math.random()<0.4) bot.jumpQ=true;                  // chase upward
+  if(Math.random()<0.15) bot.jumpQ=true;                             // occasional hop
+}
+
+/* ---------- combat ---------- */
+function spawnHit(x,y,color,n,power){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, s=(0.3+Math.random()*0.7)*(power||120);
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-40,life:0.28+Math.random()*0.2,
+                    t:0,r:2+Math.random()*3,color});
+  }
+}
+function applyHit(att, def, dmg, base, scale, angleDeg){
+  if(def.dead || def.invuln>0) return;
+  if(def.shield && def.onGround){
+    def.vx += att.face*90;                       // blocked: small pushback only
+    spawnHit(def.x+att.face*14, def.y-30, "#bfe8ff", 6, 90);
+    blip(220,0.06,"square",0.04);
+    return;
+  }
+  def.pct += dmg;
+  const kb = (base + def.pct*scale) * def.cfg.weight;
+  const a = angleDeg*Math.PI/180;
+  def.vx = Math.cos(a)*kb*att.face * (angleDeg===90?0:1);
+  def.vy = -Math.sin(a)*kb - 60;
+  if(angleDeg===90){ def.vx = att.face*kb*0.35; }
+  def.hitstun = Math.min(0.9, kb/1250);
+  def.flash = 0.10;
+  def.jumps = Math.max(def.jumps, 1);            // getting hit refreshes a jump (forgiveness)
+  hitstop = Math.min(0.11, 0.035 + dmg*0.006 + def.pct*0.0002);
+  if(kb>430){ shake = Math.min(14,(kb-430)/38); noiseBurst(0.12,0.10); }
+  else blip(150+Math.random()*60, 0.07, "square", 0.05);
+  spawnHit(def.x, def.y-30, att.kind==="ember" ? "#ffb03a" : "#aab4ff", 8+dmg, 110+dmg*8);
+  floaters.push({x:def.x, y:def.y-78, t:0, text:"+"+dmg+"%", color:"#fff"});
+}
+function meleeBox(f){
+  const r=f.cfg.jab.range;
+  return { x1: Math.min(f.x, f.x+f.face*r)-6, x2: Math.max(f.x, f.x+f.face*r)+6,
+           y1: f.y-52, y2: f.y-8 };
+}
+function bodyHit(f, box){
+  return f.x+13>box.x1 && f.x-13<box.x2 && f.y>box.y1 && f.y-56<box.y2;
+}
+
+/* ---------- per-fighter update ---------- */
+function updateFighter(f, dt){
+  const inp=f.input, cfg=f.cfg;
+  if(f.dead){ f.respawnT-=dt; if(f.respawnT<=0) respawn(f); return; }
+  if(f.invuln>0) f.invuln-=dt;
+  if(f.flash>0) f.flash-=dt;
+  if(f.atkCool>0) f.atkCool-=dt;
+  if(f.specCool>0) f.specCool-=dt;
+  if(f.dropT>0) f.dropT-=dt;
+  if(f.landSquash>0) f.landSquash-=dt*6;
+
+  const stunned = f.hitstun>0;
+  if(stunned) f.hitstun-=dt;
+  f.shield = !stunned && inp.shield && f.onGround;
+
+  // --- dash strike state (Shade special) ---
+  if(f.dashT>0){
+    f.dashT-=dt;
+    f.vy = Math.min(f.vy, 60);                       // hover during dash
+    if(!f.dashHitDone){
+      const box={ x1:Math.min(f.x,f.x+f.face*44)-4, x2:Math.max(f.x,f.x+f.face*44)+4,
+                  y1:f.y-54, y2:f.y-6 };
+      const o=foe(f);
+      if(bodyHit(o,box)){ applyHit(f,o,9,330,3.6,32); f.dashHitDone=true; }
+    }
+  }
+
+  if(!stunned && f.dashT<=0){
+    // --- horizontal movement ---
+    const sp = cfg.speed;
+    if(inp.left && !f.shield){ f.vx = -sp; f.face=-1; }
+    else if(inp.right && !f.shield){ f.vx = sp; f.face=1; }
+    else if(f.onGround) f.vx *= Math.pow(0.0001,dt);  // snappy stop
+    else f.vx *= Math.pow(0.4,dt);                    // mild air drag
+
+    // --- jumping ---
+    if(inp.jumpP){
+      if(f.onGround){ f.vy=-cfg.jumpV; f.onGround=false; f.jumps=1; blip(520,0.05,"sine",0.03); }
+      else if(f.jumps>0){ f.vy=-cfg.jumpV*0.92; f.jumps--; spawnHit(f.x,f.y+2,"#ffffff",5,60); }
+    }
+    // --- drop through platforms / fast fall ---
+    if(inp.down && f.onGround && f.standingPlat && f.standingPlat.y<STAGE.top){ f.dropT=0.22; f.onGround=false; f.y+=3; }
+    f.ff = inp.down && !f.onGround;
+
+    // --- light attack ---
+    if(inp.lightP && f.atkCool<=0 && !f.shield){
+      f.atkCool=cfg.jab.cool; f.atkT=0.16;
+      const o=foe(f);
+      if(bodyHit(o, meleeBox(f))) applyHit(f,o,cfg.jab.dmg,cfg.jab.base,cfg.jab.scale, f.kind==="ember"?38:34);
+      else blip(300,0.03,"sine",0.015);
+    }
+    // --- special ---
+    if(inp.specialP && f.specCool<=0 && !f.shield){
+      if(f.kind==="ember"){
+        f.specCool=0.55;
+        projectiles.push({ x:f.x+f.face*26, y:f.y-32, vx:f.face*540, owner:f,
+                           life:1.15, r:15, t:0 });
+        f.vx -= f.face*40;                            // tiny recoil
+        blip(180,0.12,"sawtooth",0.045);
+      } else {
+        f.specCool=0.72; f.dashT=0.16; f.dashHitDone=false;
+        f.vx=f.face*790; f.vy=Math.min(f.vy,0);
+        blip(700,0.08,"sine",0.04);
+      }
+    }
+  }
+  if(f.atkT>0) f.atkT-=dt;
+
+  // --- physics ---
+  f.vy += GRAV*dt*(f.dashT>0?0.25:1);
+  if(f.ff) f.vy=Math.min(Math.max(f.vy,FASTFALL), FASTFALL+400);
+  else f.vy=Math.min(f.vy, MAXFALL);
+  const prevBottom=f.y;
+  f.x += f.vx*dt; f.y += f.vy*dt;
+
+  // --- platform collision (one-way) ---
+  const wasGround=f.onGround; f.onGround=false; f.standingPlat=null;
+  if(f.vy>=0 && f.dropT<=0){
+    const plats = respawnPlatT>0 ? PLATS.concat([RESP_PLAT]) : PLATS;
+    for(const p of plats){
+      if(f.x>p.x-8 && f.x<p.x+p.w+8 && prevBottom<=p.y+1 && f.y>=p.y){
+        f.y=p.y; f.vy=0; f.onGround=true; f.standingPlat=p; break;
+      }
+    }
+  }
+  if(f.onGround){
+    f.jumps=1; f.ff=false;
+    if(!wasGround){ f.landSquash=0.7; spawnHit(f.x,f.y,"#ffffff",3,40); }
+  }
+  // running animation phase
+  if(f.onGround && Math.abs(f.vx)>20) f.runPhase += dt*Math.abs(f.vx)*0.045;
+  else f.runPhase *= 0.8;
+
+  // --- blast zones ---
+  if(f.x<BLAST.left || f.x>BLAST.right || f.y<BLAST.top || f.y>BLAST.bottom) doKO(f);
+}
+function respawn(f){
+  f.dead=false; f.pct=0; f.x=480; f.y=RESP_PLAT.y; f.vx=0; f.vy=0; f.hitstun=0; f.invuln=2.0;
+}
+function doKO(f){
+  f.stocks--; f.dead=true; f.respawnT=0.9; respawnPlatT=3.6;
+  shake=12; noiseBurst(0.25,0.14); blip(880,0.3,"sine",0.05);
+  for(let i=0;i<22;i++){
+    const a=(i/22)*Math.PI*2;
+    particles.push({x:Math.max(20,Math.min(W-20,f.x)), y:Math.max(30,Math.min(H-40,f.y)),
+      vx:Math.cos(a)*260, vy:Math.sin(a)*260, life:0.55, t:0, r:3.5, color:"#ffe066"});
+  }
+  floaters.push({x:480, y:120, t:0, big:true,
+                 text:f.cfg.name+" KO!", color:"#e05252"});
+  if(f.stocks<=0){ matchOver=true; winner=foe(f); }
+}
+
+/* ---------- projectiles ---------- */
+function updateProjectiles(dt){
+  for(const pr of projectiles){
+    pr.t+=dt; pr.life-=dt; pr.x+=pr.vx*dt;
+    if(Math.random()<0.8)
+      particles.push({x:pr.x-Math.sign(pr.vx)*10, y:pr.y+(Math.random()*14-7),
+        vx:-pr.vx*0.15, vy:-30-Math.random()*40, life:0.3, t:0, r:3+Math.random()*3,
+        color:Math.random()<0.5?"#ff9a3c":"#ffd23e"});
+    const o=foe(pr.owner);
+    if(!o.dead && o.invuln<=0 && Math.abs(o.x-pr.x)<pr.r+13 && o.y-56<pr.y+pr.r && o.y>pr.y-pr.r){
+      applyHit({face:Math.sign(pr.vx), kind:pr.owner.kind}, o, 8, 300, 3.4, 22);
+      pr.life=0;
+    }
+    if(pr.x<-60||pr.x>W+60) pr.life=0;
+  }
+  projectiles=projectiles.filter(p=>p.life>0);
+}
+
+/* ---------- drawing ---------- */
+const clouds=[{x:120,y:80,s:1.1,v:6},{x:430,y:52,s:0.8,v:4},{x:700,y:110,s:1.3,v:7},{x:880,y:60,s:0.7,v:5}];
+function drawBG(t){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#a8d8ff"); g.addColorStop(0.6,"#d6efff"); g.addColorStop(1,"#fdf0cd");
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // sun
+  ctx.fillStyle="#fff3b0"; ctx.beginPath(); ctx.arc(862,74,30,0,7); ctx.fill();
+  ctx.fillStyle="#ffedb5"; ctx.beginPath(); ctx.arc(862,74,40,0,7); ctx.globalAlpha=0.35; ctx.fill(); ctx.globalAlpha=1;
+  // clouds
+  ctx.fillStyle="#ffffff";
+  for(const c of clouds){
+    const cx=((c.x + t*c.v) % (W+220)) - 110;
+    ctx.globalAlpha=0.9;
+    ctx.beginPath();
+    ctx.ellipse(cx,c.y,46*c.s,17*c.s,0,0,7); ctx.ellipse(cx+30*c.s,c.y+4*c.s,34*c.s,13*c.s,0,0,7);
+    ctx.ellipse(cx-32*c.s,c.y+5*c.s,30*c.s,11*c.s,0,0,7); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  // distant hills
+  ctx.fillStyle="#bfe6c8";
+  ctx.beginPath(); ctx.ellipse(150,470,300,90,0,Math.PI,0); ctx.fill();
+  ctx.fillStyle="#a9dcbc";
+  ctx.beginPath(); ctx.ellipse(830,486,320,100,0,Math.PI,0); ctx.fill();
+}
+function drawStage(){
+  for(let i=PLATS.length-1;i>=0;i--){
+    const p=PLATS[i], main=i===0;
+    const depth=main?54:16;
+    ctx.fillStyle=main?"#c98d5f":"#b7c9d6";
+    roundRect(p.x, p.y, p.w, depth, main?10:7); ctx.fill();
+    ctx.fillStyle=main?"#8ed081":"#a5dd9b";
+    roundRect(p.x, p.y, p.w, 12, 6); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,.35)";
+    roundRect(p.x, p.y, p.w, 4, 3); ctx.fill();
+  }
+  // respawn platform (temporary, landable)
+  if(respawnPlatT>0){
+    ctx.fillStyle="#cfd8dc"; roundRect(RESP_PLAT.x, RESP_PLAT.y, RESP_PLAT.w, 10, 5); ctx.fill();
+    ctx.fillStyle="#90a4ae"; roundRect(RESP_PLAT.x, RESP_PLAT.y, RESP_PLAT.w, 4, 3); ctx.fill();
+  }
+}
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function drawFighter(f,t){
+  if(f.dead) return;
+  const cfg=f.cfg;
+  ctx.save();
+  ctx.translate(f.x, f.y);
+  if(f.invuln>0 && Math.floor(t*14)%2===0) ctx.globalAlpha=0.35;
+  const squash = f.landSquash>0 ? 1-0.18*f.landSquash : 1;
+  ctx.scale(f.face, squash);
+  const airborne=!f.onGround;
+  const run = f.onGround && Math.abs(f.vx)>20;
+  const legSwing = run ? Math.sin(f.runPhase)*10 : 0;
+  const bob = run ? Math.abs(Math.sin(f.runPhase))*2 : Math.sin(t*2.2)*0.8;
+
+  // legs
+  ctx.strokeStyle=cfg.dark; ctx.lineWidth=7; ctx.lineCap="round";
+  ctx.beginPath();
+  if(airborne){ ctx.moveTo(0,-24); ctx.lineTo(7,-8); ctx.moveTo(0,-24); ctx.lineTo(-8,-10); }
+  else{ ctx.moveTo(0,-24); ctx.lineTo(legSwing,-1); ctx.moveTo(0,-24); ctx.lineTo(-legSwing,-1); }
+  ctx.stroke();
+  // torso capsule
+  ctx.fillStyle=cfg.color;
+  roundRect(-13,-52+bob*0.3,26,30,11); ctx.fill();
+  // belt / accent
+  ctx.fillStyle=cfg.accent; ctx.fillRect(-13,-27+bob*0.3,26,4);
+  // head
+  ctx.fillStyle=cfg.skin;
+  ctx.beginPath(); ctx.arc(1,-60+bob*0.3,11.5,0,7); ctx.fill();
+  // hair / hood signature
+  ctx.fillStyle=cfg.dark;
+  ctx.beginPath();
+  if(f.kind==="ember"){
+    ctx.arc(1,-63+bob*0.3,11.5,Math.PI*1.02,Math.PI*1.98);
+    ctx.lineTo(6,-78+bob*0.3); ctx.lineTo(1,-66+bob*0.3); ctx.lineTo(-5,-76+bob*0.3);
+    ctx.closePath();
+  } else {
+    ctx.arc(1,-61+bob*0.3,12.5,Math.PI*0.95,Math.PI*2.05); ctx.closePath();
+    ctx.fillRect(-11.5,-63+bob*0.3,23,5);                    // hood band
+  }
+  ctx.fill();
+  // eye
+  ctx.fillStyle="#263238";
+  ctx.beginPath(); ctx.arc(6,-59+bob*0.3,1.7,0,7); ctx.fill();
+  if(f.kind==="shade"){ ctx.fillStyle=cfg.accent; ctx.fillRect(-2,-52+bob*0.3,13,3.4); } // mask stripe
+  // back arm
+  ctx.strokeStyle=cfg.dark; ctx.lineWidth=6;
+  ctx.beginPath(); ctx.moveTo(-8,-44+bob*0.3); ctx.lineTo(-14,-30+bob*0.3); ctx.stroke();
+  // front arm / attack
+  ctx.strokeStyle=cfg.dark;
+  ctx.beginPath();
+  if(f.atkT>0){
+    ctx.moveTo(8,-44+bob*0.3); ctx.lineTo(30,-40+bob*0.3); ctx.stroke();
+    // strike effect
+    if(f.kind==="ember"){
+      ctx.fillStyle="#ff9a3c";
+      ctx.beginPath(); ctx.arc(38,-40+bob*0.3,11,0,7); ctx.fill();
+      ctx.fillStyle="#ffd23e";
+      ctx.beginPath(); ctx.arc(38,-40+bob*0.3,6.5,0,7); ctx.fill();
+    } else {
+      ctx.strokeStyle=cfg.accent; ctx.lineWidth=3.5;
+      ctx.beginPath(); ctx.arc(26,-40+bob*0.3,15,-0.7,0.9); ctx.stroke();
+    }
+  } else if(f.dashT>0){
+    ctx.moveTo(8,-44+bob*0.3); ctx.lineTo(26,-38+bob*0.3); ctx.stroke();
+    ctx.strokeStyle=cfg.accent; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(26,-38+bob*0.3); ctx.lineTo(44,-38+bob*0.3); ctx.stroke();
+  } else {
+    ctx.moveTo(8,-44+bob*0.3); ctx.lineTo(15,-31+bob*0.3); ctx.stroke();
+  }
+  ctx.restore();
+
+  // hit flash
+  if(f.flash>0){
+    ctx.save(); ctx.globalAlpha=f.flash*5; ctx.fillStyle="#fff";
+    roundRect(f.x-16,f.y-74,32,74,12); ctx.fill(); ctx.restore();
+  }
+  // shield bubble
+  if(f.shield){
+    ctx.save();
+    const g=ctx.createRadialGradient(f.x,f.y-30,6,f.x,f.y-30,44);
+    g.addColorStop(0,"rgba(160,225,255,0.10)"); g.addColorStop(1,"rgba(120,200,255,0.5)");
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(f.x,f.y-30,42,0,7); ctx.fill();
+    ctx.strokeStyle="rgba(220,245,255,0.9)"; ctx.lineWidth=2; ctx.stroke();
+    ctx.restore();
+  }
+}
+function drawProjectiles(){
+  for(const pr of projectiles){
+    ctx.save(); ctx.translate(pr.x,pr.y); ctx.scale(Math.sign(pr.vx),1);
+    const flick=1+Math.sin(pr.t*40)*0.12;
+    ctx.fillStyle="#ff7b2e";
+    ctx.beginPath(); ctx.ellipse(0,0,20*flick,15*flick,0,0,7); ctx.fill();
+    ctx.fillStyle="#ffa63e";
+    ctx.beginPath(); ctx.ellipse(2,0,14*flick,10.5*flick,0,0,7); ctx.fill();
+    ctx.fillStyle="#ffd23e";
+    ctx.beginPath(); ctx.ellipse(4,0,8,6,0,0,7); ctx.fill();
+    // knuckle bumps
+    ctx.fillStyle="#ffa63e";
+    for(const ky of [-8,-2.5,3.5,9]){ ctx.beginPath(); ctx.arc(15,ky,3.4,0,7); ctx.fill(); }
+    ctx.restore();
+  }
+}
+function pctColor(p){
+  if(p<50) return "#ffffff";
+  if(p<100) return "#ffd23e";
+  if(p<150) return "#ff9a3c";
+  return "#ff5252";
+}
+function drawHUD(){
+  const draw=(f, x, align)=>{
+    ctx.save();
+    ctx.textAlign=align;
+    // panel
+    ctx.fillStyle="rgba(20,50,75,0.35)";
+    const wPanel=210, px = align==="left"? x : x-wPanel;
+    roundRect(px, 14, wPanel, 64, 12); ctx.fill();
+    ctx.fillStyle=f.cfg.color;
+    ctx.beginPath(); ctx.arc(align==="left"? px+24 : px+wPanel-24, 40, 12, 0, 7); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.font="bold 15px ui-rounded,system-ui,sans-serif";
+    ctx.fillText(f.cfg.name.toUpperCase(), align==="left"? px+44 : px+wPanel-44, 38);
+    ctx.font="bold 26px ui-rounded,system-ui,sans-serif";
+    ctx.fillStyle=pctColor(f.pct);
+    ctx.strokeStyle="rgba(0,0,0,0.35)"; ctx.lineWidth=3;
+    const pctTxt=Math.floor(f.pct)+"%";
+    const tx = align==="left"? px+44 : px+wPanel-44;
+    ctx.strokeText(pctTxt, tx, 68); ctx.fillText(pctTxt, tx, 68);
+    // stocks
+    for(let i=0;i<f.stocks;i++){
+      ctx.fillStyle=f.cfg.accent; ctx.strokeStyle="rgba(0,0,0,0.3)"; ctx.lineWidth=1.5;
+      const sx = align==="left"? px+wPanel-20-i*17 : px+20+i*17;
+      ctx.beginPath(); ctx.arc(sx, 62, 6, 0, 7); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  };
+  draw(P1, 16, "left");
+  draw(CPU, W-16, "right");
+  ctx.save(); ctx.textAlign="center"; ctx.fillStyle="rgba(255,255,255,0.85)";
+  ctx.font="12.5px ui-rounded,system-ui,sans-serif";
+  ctx.fillText("CPU: "+CPU.cfg.name+" — "+CPU.cfg.specialName+" on special", W/2, 26);
+  ctx.restore();
+}
+function drawOverlay(t){
+  if(!matchOver) return;
+  ctx.save();
+  ctx.fillStyle="rgba(23,52,74,0.45)"; ctx.fillRect(0,0,W,H);
+  ctx.textAlign="center";
+  ctx.fillStyle="#fff"; ctx.font="bold 52px ui-rounded,system-ui,sans-serif";
+  ctx.strokeStyle="rgba(0,0,0,0.4)"; ctx.lineWidth=6;
+  const txt=winner.cfg.name.toUpperCase()+" WINS!";
+  ctx.strokeText(txt, W/2, H/2-8); ctx.fillText(txt, W/2, H/2-8);
+  ctx.font="18px ui-rounded,system-ui,sans-serif"; ctx.fillStyle="#eaf6ff";
+  ctx.fillText("Press R to play again — 1 for Ember, 2 for Shade", W/2, H/2+34);
+  ctx.restore();
+}
+
+/* ---------- main loop ---------- */
+let last=performance.now(), elapsed=0;
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt=(now-last)/1000; last=now;
+  if(dt>0.05) dt=0.05;
+  elapsed+=dt;
+
+  if(hitstop>0){ hitstop-=dt; }
+  else if(!matchOver){
+    // gather inputs
+    readKeyboard(P1); kbEdges(P1); readPad(P1);
+    botThink(dt);
+    updateFighter(P1, dt);
+    updateFighter(CPU, dt);
+    updateProjectiles(dt);
+  }
+  // particles & floaters always animate
+  for(const p of particles){ p.t+=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=300*dt; }
+  particles=particles.filter(p=>p.t<p.life);
+  for(const fl of floaters){ fl.t+=dt; fl.y-=26*dt; }
+  floaters=floaters.filter(fl=>fl.t<(fl.big?1.4:0.7));
+  if(shake>0) shake=Math.max(0, shake-dt*26);
+  if(respawnPlatT>0) respawnPlatT-=dt;
+
+  // ---- render ----
+  ctx.save();
+  if(shake>0) ctx.translate((Math.random()*2-1)*shake, (Math.random()*2-1)*shake);
+  drawBG(elapsed);
+  drawStage();
+  drawProjectiles();
+  drawFighter(P1, elapsed);
+  drawFighter(CPU, elapsed);
+  for(const p of particles){
+    ctx.globalAlpha=1-p.t/p.life; ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  for(const fl of floaters){
+    ctx.save(); ctx.textAlign="center";
+    ctx.font=(fl.big?"bold 30px":"bold 15px")+" ui-rounded,system-ui,sans-serif";
+    ctx.fillStyle=fl.color; ctx.strokeStyle="rgba(0,0,0,0.4)"; ctx.lineWidth=3;
+    ctx.strokeText(fl.text, fl.x, fl.y); ctx.fillText(fl.text, fl.x, fl.y);
+    ctx.restore();
+  }
+  ctx.restore();
+  drawHUD();
+  drawOverlay(elapsed);
+}
+resetMatch();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
