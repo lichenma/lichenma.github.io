@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Mirror Sky - a sunset above the clouds</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#1a1030;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  canvas { display:block; }
+  .chip { position:fixed; z-index:10; color:#fff; background:rgba(20,12,40,.55);
+    backdrop-filter: blur(6px); border:1px solid rgba(255,255,255,.18); border-radius:14px;
+    padding:10px 14px; pointer-events:none; }
+  #title { top:14px; left:14px; }
+  #title h1 { margin:0; font-size:19px; letter-spacing:.14em; text-transform:uppercase; font-weight:700; }
+  #title p { margin:3px 0 0; font-size:12.5px; opacity:.85; }
+  #hint { bottom:14px; left:14px; font-size:12.5px; opacity:.95; }
+  #nogl { display:none; position:fixed; inset:0; z-index:20; color:#fff; text-align:center;
+    padding-top:22vh; font-size:16px; line-height:1.6; }
+  /* Three.js VRButton gets id="VRButton" */
+  #VRButton { bottom:14px !important; right:14px !important; left:auto !important;
+    border-radius:12px !important; font-size:13px !important; }
+</style>
+</head>
+<body>
+
+<div class="chip" id="title">
+  <h1>Mirror Sky</h1>
+  <p>a sunset above the clouds, an SAO-inspired diorama</p>
+</div>
+<div class="chip" id="hint">Drag to look around &middot; On Quest: open this page in the headset browser and tap <b>Enter VR</b></div>
+<div id="nogl">This scene needs WebGL.<br>Try a modern browser, or the Quest browser, where it is meant to live.</div>
+
+<!-- ============================================================
+     THE STACK, in the order the scene is built below:
+     1. Import map   - tells the browser where the Three.js library lives.
+     2. Renderer     - the WebGL engine; also owns the WebXR (VR) session.
+     3. Sky          - a giant sphere wearing a custom GLSL shader (gradient + sun).
+     4. Mirror floor - a Reflector: it renders the scene a second time from a
+                       flipped camera into a texture, so the floor truly reflects.
+     5. Clouds       - flat images ("billboards" / sprites) painted on a canvas,
+                       always turning to face you. Cheap, and perfect for anime puffs.
+     6. Platform     - plain geometry + lights: the one "solid" place to stand.
+     7. Rig + loop   - the camera sits in a movable group (the "rig"); in VR the
+                       headset drives the camera, on desktop you drag to look.
+     ============================================================ -->
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+try { init(); } catch (e) { document.getElementById('nogl').style.display = 'block'; console.error(e); }
+
+function init() {
+
+  /* ---------- 2. Renderer / scene / camera ---------- */
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;      // filmic color = instant sunset softness
+  renderer.toneMappingExposure = 1.15;
+  renderer.xr.enabled = true;                              // WebXR switch
+  document.body.appendChild(renderer.domElement);
+  document.body.appendChild(VRButton.createButton(renderer, { optionalFeatures: ['local-floor'] }));
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0xdf9a72, 90, 750);            // warm haze = depth
+
+  const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 2000);
+  camera.position.set(0, 1.6, 0.9);
+
+  // The rig: in VR, your real floor maps to the rig's origin. We lift the rig
+  // so your feet land exactly on the platform's top surface.
+  const rig = new THREE.Group();
+  rig.position.y = 0.35;
+  rig.add(camera);
+  scene.add(rig);
+
+  /* ---------- Lights (only the solid geometry cares) ---------- */
+  scene.add(new THREE.HemisphereLight(0x9a86e0, 0x38222e, 0.85));
+  const sunLight = new THREE.DirectionalLight(0xffb36b, 1.6);
+  sunLight.position.set(-60, 26, -160);
+  scene.add(sunLight);
+
+  /* ---------- 3. Sky: one sphere, one shader ---------- */
+  const sunDir = new THREE.Vector3(-0.33, 0.115, -1).normalize();
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(900, 32, 20),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, fog: false,
+      uniforms: { sunDir: { value: sunDir } },
+      vertexShader: `
+        varying vec3 vDir;
+        void main(){ vDir = normalize(position);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: `
+        varying vec3 vDir; uniform vec3 sunDir;
+        float hash(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.45,45.164))) * 43758.5453); }
+        void main(){
+          float h = clamp(vDir.y, -1.0, 1.0);
+          vec3 zen = vec3(0.145,0.19,0.44);      // deep indigo up top
+          vec3 mid = vec3(0.62,0.36,0.55);       // mauve band
+          vec3 hor = vec3(1.0,0.62,0.34);        // sunset orange at the horizon
+          vec3 col = mix(hor, mid, smoothstep(0.0, 0.22, h));
+          col = mix(col, zen, smoothstep(0.18, 0.62, h));
+          col = mix(vec3(0.36,0.22,0.36), col, smoothstep(-0.25, 0.01, h)); // below horizon: dusky
+          float s = max(dot(normalize(vDir), sunDir), 0.0);
+          col += vec3(1.0,0.72,0.42) * pow(s, 600.0) * 1.6;   // sun disc
+          col += vec3(1.0,0.55,0.25) * pow(s, 10.0) * 0.38;   // halo
+          float st = step(0.9985, hash(floor(vDir * 220.0)));  // faint early stars
+          col += vec3(0.8,0.85,1.0) * st * smoothstep(0.3, 0.7, h) * 0.35;
+          gl_FragColor = vec4(col, 1.0);
+        }`
+    })
+  );
+  scene.add(sky);
+
+  // Extra glow sprite at the sun, so the light feels like it blooms.
+  function glowTexture() {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(64,64,0, 64,64,64);
+    grad.addColorStop(0, 'rgba(255,220,170,0.9)');
+    grad.addColorStop(0.35, 'rgba(255,170,100,0.35)');
+    grad.addColorStop(1, 'rgba(255,150,80,0)');
+    g.fillStyle = grad; g.fillRect(0,0,128,128);
+    return new THREE.CanvasTexture(c);
+  }
+  const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 0.95 }));
+  sunGlow.position.copy(sunDir).multiplyScalar(820);
+  sunGlow.scale.set(340, 340, 1);
+  scene.add(sunGlow);
+
+  /* ---------- 4. Mirror floor (Reflector) + a whisper of shimmer ---------- */
+  const mirror = new Reflector(new THREE.CircleGeometry(430, 64), {
+    textureWidth: 1024, textureHeight: 1024,   // capped on purpose: Quest GPUs thank us
+    color: 0x767c88                            // dims the reflection into evening
+  });
+  mirror.rotation.x = -Math.PI / 2;
+  scene.add(mirror);
+
+  function noiseTexture() {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = '#000'; g.fillRect(0,0,256,256);
+    for (let i = 0; i < 2600; i++) {
+      g.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.5) + ')';
+      g.fillRect(Math.random()*256, Math.random()*256, Math.random()*22, 1.2);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(9, 9);
+    return t;
+  }
+  const sheenTex = noiseTexture();
+  const sheen = new THREE.Mesh(
+    new THREE.CircleGeometry(430, 64),
+    new THREE.MeshBasicMaterial({ map: sheenTex, transparent: true, opacity: 0.07, depthWrite: false }));
+  sheen.rotation.x = -Math.PI / 2; sheen.position.y = 0.02;
+  scene.add(sheen);
+
+  /* ---------- 5. Clouds: canvas-painted puffs, three shapes ---------- */
+  // A tiny seeded random so the sky is the same sky on every visit.
+  function rng(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+
+  function cloudTexture(seed) {
+    const r = rng(seed);
+    const c = document.createElement('canvas'); c.width = 256; c.height = 160;
+    const g = c.getContext('2d');
+    // Many small overlapping puffs = the shaped anime cumulus look.
+    const blobs = [];
+    for (let i = 0; i < 7; i++) blobs.push([36 + i * 30 + r() * 14, 104 + r() * 10, 24 + r() * 15]); // flat-ish base row
+    for (let i = 0; i < 9; i++) blobs.push([50 + r() * 156, 62 + r() * 38, 17 + r() * 20]);          // body
+    blobs.push([118 + r() * 24, 40 + r() * 14, 30 + r() * 10]);                                       // hero puff on top
+    for (const [x, y, rad] of blobs) {
+      const grad = g.createRadialGradient(x, y, 0, x, y, rad);
+      grad.addColorStop(0, 'rgba(255,255,255,0.20)');
+      grad.addColorStop(0.7, 'rgba(255,255,255,0.10)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
+    }
+    // Sunset shading: warm light on top, violet shadow underneath.
+    g.globalCompositeOperation = 'source-atop';
+    const shade = g.createLinearGradient(0, 10, 0, 150);
+    shade.addColorStop(0, 'rgba(255,178,120,0.34)');
+    shade.addColorStop(0.45, 'rgba(255,255,255,0)');
+    shade.addColorStop(1, 'rgba(96,84,158,0.42)');
+    g.fillStyle = shade; g.fillRect(0, 0, 256, 160);
+    // Flatten the bottom edge a touch (anime clouds sit on an invisible shelf).
+    g.globalCompositeOperation = 'destination-out';
+    const fade = g.createLinearGradient(0, 118, 0, 152);
+    fade.addColorStop(0, 'rgba(0,0,0,0)'); fade.addColorStop(1, 'rgba(0,0,0,0.85)');
+    g.fillStyle = fade; g.fillRect(0, 118, 256, 42);
+    g.globalCompositeOperation = 'source-over';
+    return new THREE.CanvasTexture(c);
+  }
+  const cloudTex = [cloudTexture(11), cloudTexture(47), cloudTexture(83)];
+  const clouds = [];
+  function addCloud(texIdx, x, y, z, w, opacity, tint, speed) {
+    const m = new THREE.SpriteMaterial({ map: cloudTex[texIdx], transparent: true,
+      opacity, color: tint, depthWrite: false });
+    const s = new THREE.Sprite(m);
+    s.position.set(x, y, z);
+    s.scale.set(w, w * 0.52, 1);
+    scene.add(s);
+    clouds.push({ s, speed });
+    return s;
+  }
+  const R = rng(2026);
+  // The cloud sea you stand in: many distinct puffs resting on the mirror.
+  for (let i = 0; i < 38; i++) {
+    const a = R() * Math.PI * 2, d = 17 + Math.pow(R(), 0.7) * 120;
+    addCloud(i % 3, Math.cos(a) * d, 0.8 + R() * 2.8, Math.sin(a) * d,
+      15 + R() * 22, 0.82 + R() * 0.16, [0xffe7cd, 0xffffff, 0xe6e2ff][i % 3], 0.35 + R() * 0.5);
+  }
+  // Sky clouds, higher and slower.
+  for (let i = 0; i < 24; i++) {
+    const a = R() * Math.PI * 2, d = 100 + R() * 240;
+    addCloud(i % 3, Math.cos(a) * d, 20 + R() * 48, Math.sin(a) * d,
+      60 + R() * 95, 0.45 + R() * 0.3, [0xffd9ba, 0xf4f0ff, 0xffffff][i % 3], 0.5 + R() * 0.7);
+  }
+  // Horizon banks: barely-there layers for depth.
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + R() * 0.4;
+    addCloud(i % 3, Math.cos(a) * 400, 5 + R() * 9, Math.sin(a) * 400,
+      230 + R() * 120, 0.20 + R() * 0.1, 0xffc9a3, 0.22);
+  }
+
+  /* ---------- 6. The platform + floating shards ---------- */
+  const stone = new THREE.MeshStandardMaterial({ color: 0x35304a, roughness: 0.9, metalness: 0.05 });
+  const platform = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.7, 0.35, 48), stone);
+  platform.position.y = 0.175;
+  scene.add(platform);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(3.22, 0.045, 10, 72),
+    new THREE.MeshBasicMaterial({ color: 0xffc98a }));
+  rim.rotation.x = Math.PI / 2; rim.position.y = 0.36;
+  scene.add(rim);
+  const innerRing = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.24, 48),
+    new THREE.MeshBasicMaterial({ color: 0xffb36b, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
+  innerRing.rotation.x = -Math.PI / 2; innerRing.position.y = 0.357;
+  scene.add(innerRing);
+
+  const shards = [];
+  const shardMat = new THREE.MeshStandardMaterial({ color: 0x40365e, roughness: 1, flatShading: true });
+  const shardSpots = [[-46, 10, -70, 15], [30, 14, -95, 20], [-14, 7, -130, 26],
+                      [66, 9, -55, 11], [-88, 16, -40, 17], [12, 20, -160, 30]];
+  for (const [x, y, z, h] of shardSpots) {
+    const shard = new THREE.Mesh(new THREE.ConeGeometry(h * 0.22, h, 5), shardMat);
+    shard.position.set(x, y, z);
+    shard.rotation.z = Math.PI;               // point-down floating rock
+    shard.rotation.y = R() * Math.PI;
+    scene.add(shard);
+    shards.push({ m: shard, baseY: y, phase: R() * Math.PI * 2 });
+  }
+
+  /* ---------- 7. Controls (desktop: look from a fixed seat) ---------- */
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 1.75, -3);
+  const seatDist = camera.position.distanceTo(controls.target);
+  controls.minDistance = seatDist; controls.maxDistance = seatDist;  // the fixed viewpoint
+  controls.enablePan = false;
+  controls.rotateSpeed = 0.45;
+  controls.enableDamping = true;
+
+  /* ---------- The loop ---------- */
+  const clock = new THREE.Clock();
+  renderer.setAnimationLoop(() => {
+    const dt = Math.min(clock.getDelta(), 0.05);
+    const t = clock.elapsedTime;
+    for (const c of clouds) {                       // drift, wrap around the world
+      c.s.position.x += c.speed * dt;
+      if (c.s.position.x > 460) c.s.position.x = -460;
+    }
+    for (const sh of shards) {                      // slow bob, slower turn
+      sh.m.position.y = sh.baseY + Math.sin(t * 0.25 + sh.phase) * 0.7;
+      sh.m.rotation.y += dt * 0.04;
+    }
+    sheenTex.offset.x = t * 0.004;                  // the mirror breathes a little
+    sheenTex.offset.y = t * 0.0016;
+    if (!renderer.xr.isPresenting) controls.update();
+    renderer.render(scene, camera);
+  });
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+</script>
+</body>
+</html>
