@@ -72,7 +72,7 @@ function init() {
   document.body.appendChild(VRButton.createButton(renderer, { optionalFeatures: ['local-floor'] }));
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0xdf9a72, 90, 750);            // warm haze = depth
+  scene.fog = new THREE.Fog(0xe2a566, 90, 750);            // warm haze = depth
 
   const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 2000);
   camera.position.set(0, 1.6, 0.9);
@@ -85,13 +85,13 @@ function init() {
   scene.add(rig);
 
   /* ---------- Lights (only the solid geometry cares) ---------- */
-  scene.add(new THREE.HemisphereLight(0x9a86e0, 0x38222e, 0.85));
-  const sunLight = new THREE.DirectionalLight(0xffb36b, 1.6);
+  scene.add(new THREE.HemisphereLight(0x86a8dd, 0x4a2f1c, 0.8));
+  const sunLight = new THREE.DirectionalLight(0xffc37a, 1.7);
   sunLight.position.set(-60, 26, -160);
   scene.add(sunLight);
 
   /* ---------- 3. Sky: one sphere, one shader ---------- */
-  const sunDir = new THREE.Vector3(-0.33, 0.115, -1).normalize();
+  const sunDir = new THREE.Vector3(-0.12, 0.085, -1).normalize();
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(900, 32, 20),
     new THREE.ShaderMaterial({
@@ -106,17 +106,15 @@ function init() {
         float hash(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.45,45.164))) * 43758.5453); }
         void main(){
           float h = clamp(vDir.y, -1.0, 1.0);
-          vec3 zen = vec3(0.145,0.19,0.44);      // deep indigo up top
-          vec3 mid = vec3(0.62,0.36,0.55);       // mauve band
-          vec3 hor = vec3(1.0,0.62,0.34);        // sunset orange at the horizon
-          vec3 col = mix(hor, mid, smoothstep(0.0, 0.22, h));
-          col = mix(col, zen, smoothstep(0.18, 0.62, h));
-          col = mix(vec3(0.36,0.22,0.36), col, smoothstep(-0.25, 0.01, h)); // below horizon: dusky
+          vec3 zen = vec3(0.20,0.36,0.66);      // afternoon blue up top
+          vec3 mid = vec3(0.92,0.62,0.33);       // bronze-gold band
+          vec3 hor = vec3(1.0,0.78,0.42);        // molten gold at the horizon
+          vec3 col = mix(hor, mid, smoothstep(0.0, 0.20, h));
+          col = mix(col, zen, smoothstep(0.16, 0.58, h));
+          col = mix(vec3(0.45,0.30,0.18), col, smoothstep(-0.25, 0.01, h)); // below horizon: warm dusk
           float s = max(dot(normalize(vDir), sunDir), 0.0);
-          col += vec3(1.0,0.72,0.42) * pow(s, 600.0) * 1.6;   // sun disc
-          col += vec3(1.0,0.55,0.25) * pow(s, 10.0) * 0.38;   // halo
-          float st = step(0.9985, hash(floor(vDir * 220.0)));  // faint early stars
-          col += vec3(0.8,0.85,1.0) * st * smoothstep(0.3, 0.7, h) * 0.35;
+          col += vec3(1.0,0.80,0.50) * pow(s, 700.0) * 1.9;   // sun disc
+          col += vec3(1.0,0.62,0.28) * pow(s, 9.0) * 0.42;    // halo
           gl_FragColor = vec4(col, 1.0);
         }`
     })
@@ -143,7 +141,7 @@ function init() {
   /* ---------- 4. Mirror floor (Reflector) + a whisper of shimmer ---------- */
   const mirror = new Reflector(new THREE.CircleGeometry(430, 64), {
     textureWidth: 1024, textureHeight: 1024,   // capped on purpose: Quest GPUs thank us
-    color: 0x767c88                            // dims the reflection into evening
+    color: 0x8a7c68                            // dims the reflection into evening
   });
   mirror.rotation.x = -Math.PI / 2;
   scene.add(mirror);
@@ -182,8 +180,8 @@ function init() {
     blobs.push([118 + r() * 24, 40 + r() * 14, 30 + r() * 10]);                                       // hero puff on top
     for (const [x, y, rad] of blobs) {
       const grad = g.createRadialGradient(x, y, 0, x, y, rad);
-      grad.addColorStop(0, 'rgba(255,255,255,0.20)');
-      grad.addColorStop(0.7, 'rgba(255,255,255,0.10)');
+      grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+      grad.addColorStop(0.55, 'rgba(255,255,255,0.30)');
       grad.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = grad;
       g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
@@ -191,9 +189,9 @@ function init() {
     // Sunset shading: warm light on top, violet shadow underneath.
     g.globalCompositeOperation = 'source-atop';
     const shade = g.createLinearGradient(0, 10, 0, 150);
-    shade.addColorStop(0, 'rgba(255,178,120,0.34)');
+    shade.addColorStop(0, 'rgba(255,190,120,0.42)');
     shade.addColorStop(0.45, 'rgba(255,255,255,0)');
-    shade.addColorStop(1, 'rgba(96,84,158,0.42)');
+    shade.addColorStop(1, 'rgba(122,82,52,0.40)');
     g.fillStyle = shade; g.fillRect(0, 0, 256, 160);
     // Flatten the bottom edge a touch (anime clouds sit on an invisible shelf).
     g.globalCompositeOperation = 'destination-out';
@@ -220,23 +218,23 @@ function init() {
   for (let i = 0; i < 38; i++) {
     const a = R() * Math.PI * 2, d = 17 + Math.pow(R(), 0.7) * 120;
     addCloud(i % 3, Math.cos(a) * d, 0.8 + R() * 2.8, Math.sin(a) * d,
-      15 + R() * 22, 0.82 + R() * 0.16, [0xffe7cd, 0xffffff, 0xe6e2ff][i % 3], 0.35 + R() * 0.5);
+      15 + R() * 22, 0.88 + R() * 0.12, [0xfff3dd, 0xffdfae, 0xffffff][i % 3], 0.35 + R() * 0.5);
   }
   // Sky clouds, higher and slower.
   for (let i = 0; i < 24; i++) {
     const a = R() * Math.PI * 2, d = 100 + R() * 240;
     addCloud(i % 3, Math.cos(a) * d, 20 + R() * 48, Math.sin(a) * d,
-      60 + R() * 95, 0.45 + R() * 0.3, [0xffd9ba, 0xf4f0ff, 0xffffff][i % 3], 0.5 + R() * 0.7);
+      60 + R() * 95, 0.55 + R() * 0.3, [0xffe2b8, 0xfff6e6, 0xdfe9ff][i % 3], 0.5 + R() * 0.7);
   }
   // Horizon banks: barely-there layers for depth.
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2 + R() * 0.4;
     addCloud(i % 3, Math.cos(a) * 400, 5 + R() * 9, Math.sin(a) * 400,
-      230 + R() * 120, 0.20 + R() * 0.1, 0xffc9a3, 0.22);
+      230 + R() * 120, 0.20 + R() * 0.1, 0xffd2a0, 0.22);
   }
 
   /* ---------- 6. The platform + floating shards ---------- */
-  const stone = new THREE.MeshStandardMaterial({ color: 0x35304a, roughness: 0.9, metalness: 0.05 });
+  const stone = new THREE.MeshStandardMaterial({ color: 0x3b332c, roughness: 0.9, metalness: 0.05 });
   const platform = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.7, 0.35, 48), stone);
   platform.position.y = 0.175;
   scene.add(platform);
@@ -250,7 +248,7 @@ function init() {
   scene.add(innerRing);
 
   const shards = [];
-  const shardMat = new THREE.MeshStandardMaterial({ color: 0x40365e, roughness: 1, flatShading: true });
+  const shardMat = new THREE.MeshStandardMaterial({ color: 0x5c4832, roughness: 1, flatShading: true });
   const shardSpots = [[-46, 10, -70, 15], [30, 14, -95, 20], [-14, 7, -130, 26],
                       [66, 9, -55, 11], [-88, 16, -40, 17], [12, 20, -160, 30]];
   for (const [x, y, z, h] of shardSpots) {
