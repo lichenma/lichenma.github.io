@@ -66,7 +66,7 @@ function init() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;      // filmic color = instant sunset softness
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.22;
   renderer.xr.enabled = true;                              // WebXR switch
   document.body.appendChild(renderer.domElement);
   document.body.appendChild(VRButton.createButton(renderer, { optionalFeatures: ['local-floor'] }));
@@ -96,14 +96,22 @@ function init() {
     new THREE.SphereGeometry(900, 32, 20),
     new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
-      uniforms: { sunDir: { value: sunDir } },
+      uniforms: { sunDir: { value: sunDir }, uTime: { value: 0 } },
       vertexShader: `
         varying vec3 vDir;
         void main(){ vDir = normalize(position);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: `
-        varying vec3 vDir; uniform vec3 sunDir;
+        varying vec3 vDir; uniform vec3 sunDir; uniform float uTime;
         float hash(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.45,45.164))) * 43758.5453); }
+        float hash21(vec2 p){ p = fract(p * vec2(234.34, 435.345)); p += dot(p, p + 34.23); return fract(p.x * p.y); }
+        float vnoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          float a = hash21(i); float b = hash21(i + vec2(1.0, 0.0));
+          float c = hash21(i + vec2(0.0, 1.0)); float d = hash21(i + vec2(1.0, 1.0));
+          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y); }
+        float fbm(vec2 p){ float v = 0.0; float a = 0.5;
+          for(int i = 0; i < 5; i++){ v += a * vnoise(p); p = p * 2.03 + vec2(19.7, 7.3); a *= 0.55; }
+          return v; }
         void main(){
           float h = clamp(vDir.y, -1.0, 1.0);
           vec3 zen = vec3(0.20,0.36,0.66);      // afternoon blue up top
@@ -115,6 +123,21 @@ function init() {
           float s = max(dot(normalize(vDir), sunDir), 0.0);
           col += vec3(1.0,0.80,0.50) * pow(s, 700.0) * 1.9;   // sun disc
           col += vec3(1.0,0.62,0.28) * pow(s, 9.0) * 0.42;    // halo
+          // Painted clouds: fractal noise on a sky-projected plane, lit from the sun side.
+          if (h > 0.015) {
+            vec2 cuv = vDir.xz / (h + 0.22);
+            vec2 drift = vec2(uTime * 0.004, uTime * 0.0013);
+            float base = fbm(cuv * 1.35 + drift);
+            float detail = fbm(cuv * 4.2 + drift * 2.0);
+            float band = smoothstep(0.015, 0.09, h) * (1.0 - smoothstep(0.55, 0.95, h));
+            float cov = smoothstep(0.46, 0.74, base * 0.82 + detail * 0.28) * band;
+            float towardSun = fbm(cuv * 1.35 + sunDir.xz * 0.38 + drift);
+            float light = clamp((towardSun - base) * 2.4 + pow(s, 2.0) * 0.9 + (1.0 - h) * 0.18, 0.0, 1.0);
+            vec3 cloudShadow = vec3(0.40, 0.225, 0.125);
+            vec3 cloudLit = vec3(1.06, 0.74, 0.40);
+            vec3 cloudCol = mix(cloudShadow, cloudLit, light);
+            col = mix(col, cloudCol, cov * 0.92);
+          }
           gl_FragColor = vec4(col, 1.0);
         }`
     })
@@ -232,6 +255,11 @@ function init() {
     addCloud(i % 3, Math.cos(a) * 400, 5 + R() * 9, Math.sin(a) * 400,
       230 + R() * 120, 0.20 + R() * 0.1, 0xffd2a0, 0.22);
   }
+  // Hero banks: a few big, dense masses low around the sun side, like the frame.
+  const heroSpots = [[-120, 13, -215, 190], [95, 10, -235, 210], [-235, 17, -120, 170],
+                     [230, 15, -140, 180], [10, 20, -265, 200], [-60, 8, -190, 150]];
+  heroSpots.forEach(([x, y, z, w], i) =>
+    addCloud(i % 3, x, y, z, w, 0.5 + (i % 3) * 0.06, [0xffdfae, 0xfff3dd, 0xffe2b8][i % 3], 0.3));
 
   /* ---------- 6. The platform + floating shards ---------- */
   const stone = new THREE.MeshStandardMaterial({ color: 0x3b332c, roughness: 0.9, metalness: 0.05 });
@@ -247,18 +275,7 @@ function init() {
   innerRing.rotation.x = -Math.PI / 2; innerRing.position.y = 0.357;
   scene.add(innerRing);
 
-  const shards = [];
-  const shardMat = new THREE.MeshStandardMaterial({ color: 0x5c4832, roughness: 1, flatShading: true });
-  const shardSpots = [[-46, 10, -70, 15], [30, 14, -95, 20], [-14, 7, -130, 26],
-                      [66, 9, -55, 11], [-88, 16, -40, 17], [12, 20, -160, 30]];
-  for (const [x, y, z, h] of shardSpots) {
-    const shard = new THREE.Mesh(new THREE.ConeGeometry(h * 0.22, h, 5), shardMat);
-    shard.position.set(x, y, z);
-    shard.rotation.z = Math.PI;               // point-down floating rock
-    shard.rotation.y = R() * Math.PI;
-    scene.add(shard);
-    shards.push({ m: shard, baseY: y, phase: R() * Math.PI * 2 });
-  }
+  // v0.2: floating shards removed at Lichen's direction - sky, clouds, mirror only.
 
   /* ---------- 7. Controls (desktop: look from a fixed seat) ---------- */
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -278,12 +295,9 @@ function init() {
       c.s.position.x += c.speed * dt;
       if (c.s.position.x > 460) c.s.position.x = -460;
     }
-    for (const sh of shards) {                      // slow bob, slower turn
-      sh.m.position.y = sh.baseY + Math.sin(t * 0.25 + sh.phase) * 0.7;
-      sh.m.rotation.y += dt * 0.04;
-    }
     sheenTex.offset.x = t * 0.004;                  // the mirror breathes a little
     sheenTex.offset.y = t * 0.0016;
+    sky.material.uniforms.uTime.value = t;          // shader clouds drift, barely
     if (!renderer.xr.isPresenting) controls.update();
     renderer.render(scene, camera);
   });
