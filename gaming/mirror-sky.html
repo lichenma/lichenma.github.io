@@ -38,9 +38,12 @@
      3. Sky          - a giant sphere wearing a custom GLSL shader (gradient + sun).
      4. Mirror floor - a Reflector: it renders the scene a second time from a
                        flipped camera into a texture, so the floor truly reflects.
-     5. Clouds       - flat images ("billboards" / sprites) painted on a canvas,
-                       always turning to face you. Cheap, and perfect for anime puffs.
-     6. Platform     - plain geometry + lights: the one "solid" place to stand.
+     5. Clouds       - two kinds: clouds PAINTED INTO the sky shader (fbm noise,
+                       domain-warped and eroded so they hold a cumulus shape),
+                       plus flat images ("billboards" / sprites) painted on a
+                       canvas for the cloud sea you stand in.
+     6. No platform  - v0.3 removed the stone disc at Lichen's direction:
+                       you stand directly on the mirror. Endless reflection.
      7. Rig + loop   - the camera sits in a movable group (the "rig"); in VR the
                        headset drives the camera, on desktop you drag to look.
      ============================================================ -->
@@ -77,18 +80,16 @@ function init() {
   const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 2000);
   camera.position.set(0, 1.6, 0.9);
 
-  // The rig: in VR, your real floor maps to the rig's origin. We lift the rig
-  // so your feet land exactly on the platform's top surface.
+  // The rig: in VR, your real floor maps to the rig's origin. With no
+  // platform, your feet land right on the mirror itself (y = 0).
   const rig = new THREE.Group();
-  rig.position.y = 0.35;
+  rig.position.y = 0;
   rig.add(camera);
   scene.add(rig);
 
-  /* ---------- Lights (only the solid geometry cares) ---------- */
-  scene.add(new THREE.HemisphereLight(0x86a8dd, 0x4a2f1c, 0.8));
-  const sunLight = new THREE.DirectionalLight(0xffc37a, 1.7);
-  sunLight.position.set(-60, 26, -160);
-  scene.add(sunLight);
+  /* ---------- Lights: none. v0.3 has no solid geometry left - the sky is a
+       shader, the floor is a reflection, the clouds are sprites. Nothing in
+       the scene responds to lights, so there are none. ---------- */
 
   /* ---------- 3. Sky: one sphere, one shader ---------- */
   const sunDir = new THREE.Vector3(-0.12, 0.085, -1).normalize();
@@ -122,21 +123,42 @@ function init() {
           col = mix(vec3(0.45,0.30,0.18), col, smoothstep(-0.25, 0.01, h)); // below horizon: warm dusk
           float s = max(dot(normalize(vDir), sunDir), 0.0);
           col += vec3(1.0,0.80,0.50) * pow(s, 700.0) * 1.9;   // sun disc
-          col += vec3(1.0,0.62,0.28) * pow(s, 9.0) * 0.42;    // halo
-          // Painted clouds: fractal noise on a sky-projected plane, lit from the sun side.
+          col += vec3(1.0,0.62,0.28) * pow(s, 9.0) * 0.34;    // halo (v0.3: toned down, less wash)
+          // Painted clouds, v0.3 - SHAPED, not fuzz. Three tricks from how the
+          // volumetric-cloud people do it, flattened into 2D:
+          //  1. DOMAIN WARP: bend the sample coordinates with noise first, so
+          //     the masses billow instead of blobbing in circles.
+          //  2. EROSION: a fine noise layer SUBTRACTS from the big shape,
+          //     eating the edges into cauliflower detail with real silhouette.
+          //  3. TIGHT COVERAGE: a narrow smoothstep = a defined edge, not a fade.
+          // Plus a separate high cirrus layer: stretched thin streaks, the
+          // "strewn" kind of cloud, drifting its own slower way.
           if (h > 0.015) {
-            vec2 cuv = vDir.xz / (h + 0.22);
-            vec2 drift = vec2(uTime * 0.004, uTime * 0.0013);
-            float base = fbm(cuv * 1.35 + drift);
-            float detail = fbm(cuv * 4.2 + drift * 2.0);
-            float band = smoothstep(0.015, 0.09, h) * (1.0 - smoothstep(0.55, 0.95, h));
-            float cov = smoothstep(0.46, 0.74, base * 0.82 + detail * 0.28) * band;
-            float towardSun = fbm(cuv * 1.35 + sunDir.xz * 0.38 + drift);
-            float light = clamp((towardSun - base) * 2.4 + pow(s, 2.0) * 0.9 + (1.0 - h) * 0.18, 0.0, 1.0);
-            vec3 cloudShadow = vec3(0.40, 0.225, 0.125);
-            vec3 cloudLit = vec3(1.06, 0.74, 0.40);
-            vec3 cloudCol = mix(cloudShadow, cloudLit, light);
-            col = mix(col, cloudCol, cov * 0.92);
+            vec2 cuv = vDir.xz / (h + 0.20);
+            vec2 wind = vec2(uTime * 0.010, uTime * 0.0028);          // the visible drift
+            vec2 warp = vec2(fbm(cuv * 1.05 + wind * 0.6),
+                             fbm(cuv * 1.05 + vec2(5.2, 1.3) - wind * 0.4));
+            vec2 q = cuv * 1.45 + (warp - 0.5) * 1.15 + wind;
+            float shape = fbm(q);                                      // the billow
+            float detail = fbm(cuv * 5.6 - wind * 1.6 + warp * 1.4);   // the bite
+            float density = shape - detail * 0.34 * (1.0 - shape);     // erosion
+            float band = smoothstep(0.015, 0.08, h) * (1.0 - smoothstep(0.52, 0.92, h));
+            float cov = smoothstep(0.52, 0.615, density) * band;
+            if (cov > 0.003) {
+              float towardSun = fbm(q + sunDir.xz * 0.38);
+              float light = clamp((towardSun - shape) * 2.6 + pow(s, 2.0) * 0.9 + (1.0 - h) * 0.15, 0.0, 1.0);
+              vec3 cloudShadow = vec3(0.375, 0.215, 0.13);
+              vec3 cloudLit = vec3(1.07, 0.75, 0.41);
+              vec3 cloudCol = mix(cloudShadow, cloudLit, light);
+              cloudCol += vec3(1.0, 0.72, 0.38) * cov * (1.0 - cov) * 4.0 * pow(s, 1.5) * 0.30; // gold rim at the edges
+              col = mix(col, cloudCol, cov * 0.94);
+            }
+            // Cirrus: stretched, thin, high - reads as streaks, not puffs.
+            vec2 cir = vec2(cuv.x * 0.55, cuv.y * 3.4) + vec2(uTime * 0.004, 0.0);
+            float streak = fbm(cir + warp * 0.5);
+            float cirBand = smoothstep(0.34, 0.55, h) * (1.0 - smoothstep(0.75, 0.98, h));
+            float cirCov = smoothstep(0.58, 0.78, streak) * cirBand;
+            col = mix(col, vec3(1.02, 0.80, 0.58), cirCov * 0.35);
           }
           gl_FragColor = vec4(col, 1.0);
         }`
@@ -156,7 +178,7 @@ function init() {
     return new THREE.CanvasTexture(c);
   }
   const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 0.95 }));
+    map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 0.85 }));
   sunGlow.position.copy(sunDir).multiplyScalar(820);
   sunGlow.scale.set(340, 340, 1);
   scene.add(sunGlow);
@@ -184,7 +206,7 @@ function init() {
   const sheenTex = noiseTexture();
   const sheen = new THREE.Mesh(
     new THREE.CircleGeometry(430, 64),
-    new THREE.MeshBasicMaterial({ map: sheenTex, transparent: true, opacity: 0.07, depthWrite: false }));
+    new THREE.MeshBasicMaterial({ map: sheenTex, transparent: true, opacity: 0.045, depthWrite: false }));
   sheen.rotation.x = -Math.PI / 2; sheen.position.y = 0.02;
   scene.add(sheen);
 
@@ -209,6 +231,16 @@ function init() {
       g.fillStyle = grad;
       g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
     }
+    // v0.3: fine internal detail - many tiny puffs stippled over the body, so
+    // the mass reads as built of smaller clouds instead of one smooth smear.
+    for (let i = 0; i < 30; i++) {
+      const x = 30 + r() * 196, y = 26 + r() * 96, rad = 3 + r() * 7;
+      const grad = g.createRadialGradient(x, y, 0, x, y, rad);
+      grad.addColorStop(0, 'rgba(255,255,255,' + (0.10 + r() * 0.13) + ')');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
+    }
     // Sunset shading: warm light on top, violet shadow underneath.
     g.globalCompositeOperation = 'source-atop';
     const shade = g.createLinearGradient(0, 10, 0, 150);
@@ -226,9 +258,9 @@ function init() {
   }
   const cloudTex = [cloudTexture(11), cloudTexture(47), cloudTexture(83)];
   const clouds = [];
-  function addCloud(texIdx, x, y, z, w, opacity, tint, speed) {
+  function addCloud(texIdx, x, y, z, w, opacity, tint, speed, useFog) {
     const m = new THREE.SpriteMaterial({ map: cloudTex[texIdx], transparent: true,
-      opacity, color: tint, depthWrite: false });
+      opacity, color: tint, depthWrite: false, fog: useFog !== false });
     const s = new THREE.Sprite(m);
     s.position.set(x, y, z);
     s.scale.set(w, w * 0.52, 1);
@@ -238,44 +270,37 @@ function init() {
   }
   const R = rng(2026);
   // The cloud sea you stand in: many distinct puffs resting on the mirror.
+  // v0.3: faster drift (v0.2 read as static in the headset) and fog off the
+  // near layers - distance fog was washing them into white haze.
   for (let i = 0; i < 38; i++) {
     const a = R() * Math.PI * 2, d = 17 + Math.pow(R(), 0.7) * 120;
     addCloud(i % 3, Math.cos(a) * d, 0.8 + R() * 2.8, Math.sin(a) * d,
-      15 + R() * 22, 0.88 + R() * 0.12, [0xfff3dd, 0xffdfae, 0xffffff][i % 3], 0.35 + R() * 0.5);
+      15 + R() * 22, 0.88 + R() * 0.12, [0xfff3dd, 0xffdfae, 0xffffff][i % 3], (0.35 + R() * 0.5) * 1.6, false);
   }
   // Sky clouds, higher and slower.
   for (let i = 0; i < 24; i++) {
     const a = R() * Math.PI * 2, d = 100 + R() * 240;
     addCloud(i % 3, Math.cos(a) * d, 20 + R() * 48, Math.sin(a) * d,
-      60 + R() * 95, 0.55 + R() * 0.3, [0xffe2b8, 0xfff6e6, 0xdfe9ff][i % 3], 0.5 + R() * 0.7);
+      60 + R() * 95, 0.55 + R() * 0.3, [0xffe2b8, 0xfff6e6, 0xdfe9ff][i % 3], (0.5 + R() * 0.7) * 1.5, false);
   }
-  // Horizon banks: barely-there layers for depth.
+  // Horizon banks: barely-there layers for depth (these keep their fog - it
+  // is what melts them into the horizon).
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2 + R() * 0.4;
     addCloud(i % 3, Math.cos(a) * 400, 5 + R() * 9, Math.sin(a) * 400,
-      230 + R() * 120, 0.20 + R() * 0.1, 0xffd2a0, 0.22);
+      230 + R() * 120, 0.20 + R() * 0.1, 0xffd2a0, 0.35, true);
   }
   // Hero banks: a few big, dense masses low around the sun side, like the frame.
   const heroSpots = [[-120, 13, -215, 190], [95, 10, -235, 210], [-235, 17, -120, 170],
                      [230, 15, -140, 180], [10, 20, -265, 200], [-60, 8, -190, 150]];
   heroSpots.forEach(([x, y, z, w], i) =>
-    addCloud(i % 3, x, y, z, w, 0.5 + (i % 3) * 0.06, [0xffdfae, 0xfff3dd, 0xffe2b8][i % 3], 0.3));
+    addCloud(i % 3, x, y, z, w, 0.5 + (i % 3) * 0.06, [0xffdfae, 0xfff3dd, 0xffe2b8][i % 3], 0.5, false));
 
-  /* ---------- 6. The platform + floating shards ---------- */
-  const stone = new THREE.MeshStandardMaterial({ color: 0x3b332c, roughness: 0.9, metalness: 0.05 });
-  const platform = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.7, 0.35, 48), stone);
-  platform.position.y = 0.175;
-  scene.add(platform);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(3.22, 0.045, 10, 72),
-    new THREE.MeshBasicMaterial({ color: 0xffc98a }));
-  rim.rotation.x = Math.PI / 2; rim.position.y = 0.36;
-  scene.add(rim);
-  const innerRing = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.24, 48),
-    new THREE.MeshBasicMaterial({ color: 0xffb36b, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
-  innerRing.rotation.x = -Math.PI / 2; innerRing.position.y = 0.357;
-  scene.add(innerRing);
-
-  // v0.2: floating shards removed at Lichen's direction - sky, clouds, mirror only.
+  /* ---------- 6. Standing point: none (v0.3) ----------
+     The stone platform, its glowing rim and the inner ring are gone at
+     Lichen's direction - the black disc wasn't earning its place. The mirror
+     now runs unbroken to the horizon in every direction, including under
+     your feet. (Earlier history: floating shards removed in v0.2.) */
 
   /* ---------- 7. Controls (desktop: look from a fixed seat) ---------- */
   const controls = new OrbitControls(camera, renderer.domElement);
