@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Countryside - a sunny day in the hills</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#bfd9ea;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  canvas { display:block; }
+  .chip { position:fixed; z-index:10; color:#fff; background:rgba(24,44,28,.5);
+    backdrop-filter: blur(6px); border:1px solid rgba(255,255,255,.22); border-radius:14px;
+    padding:10px 14px; pointer-events:none; }
+  #title { top:14px; left:14px; }
+  #title h1 { margin:0; font-size:19px; letter-spacing:.14em; text-transform:uppercase; font-weight:700; }
+  #title p { margin:3px 0 0; font-size:12.5px; opacity:.88; }
+  #hint { bottom:14px; left:14px; font-size:12.5px; opacity:.95; }
+  #nogl { display:none; position:fixed; inset:0; z-index:20; color:#234; text-align:center;
+    padding-top:22vh; font-size:16px; line-height:1.6; }
+  #VRButton { bottom:14px !important; right:14px !important; left:auto !important;
+    border-radius:12px !important; font-size:13px !important; }
+</style>
+</head>
+<body>
+
+<div class="chip" id="title">
+  <h1>Countryside</h1>
+  <p>a sunny day in the hills, a Japanese-countryside diorama</p>
+</div>
+<div class="chip" id="hint">Drag to look around &middot; On Quest: open this page in the headset browser and tap <b>Enter VR</b></div>
+<div id="nogl">This scene needs WebGL.<br>Try a modern browser, or the Quest browser, where it is meant to live.</div>
+
+<!-- ============================================================
+     THE BUILD, following the technique survey's countryside blueprint:
+     1. Sky       - gradient dome + the same warp/erosion cloud shader as
+                    Mirror Sky, re-lit for midday and posterised into flat
+                    anime bands. Painted, cheap, no post-processing.
+     2. Terrain   - real geometry: noise-displaced hills, vertex-coloured,
+                    flat-shaded. Real geometry is what buys depth in VR.
+     3. Terraces  - stepped rice terraces; the hero paddy is a true planar
+                    Reflector (the Mirror Sky trick, small and low-res),
+                    the rest fake it with glossy sky-blue + seedlings.
+     4. Grass     - ~16k instanced blades in ONE draw call. Static by
+                    request (v1 of this scene); the wind lives in a vertex
+                    shader in the precedents and can be switched on later.
+     5. Village   - procedural trees (a few sakura), two farmhouses,
+                    utility poles with sagging wires, dirt path.
+     6. Distance  - layered ridge silhouettes + matched fog: the classic
+                    Ghibli depth cue. No EffectComposer anywhere.
+     ============================================================ -->
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+try { init(); } catch (e) { document.getElementById('nogl').style.display = 'block'; console.error(e); }
+
+function init() {
+
+  /* ---------- Renderer / scene / camera ---------- */
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
+  renderer.shadowMap.enabled = true;                       // one shadow-casting sun:
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;        // static scene, so shadows are
+  renderer.xr.enabled = true;                              // pure beauty for near-zero risk
+  document.body.appendChild(renderer.domElement);
+  document.body.appendChild(VRButton.createButton(renderer, { optionalFeatures: ['local-floor'] }));
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0xd8e9f6, 120, 430);           // horizon-matched aerial perspective
+
+  const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 1500);
+  camera.position.set(0, 1.6, 0.9);
+
+  /* ---------- Deterministic noise (terrain + scatter share it) ---------- */
+  function hash2(x, z) { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); }
+  function vnoise(x, z) {
+    const ix = Math.floor(x), iz = Math.floor(z), fx = x - ix, fz = z - iz;
+    const ux = fx * fx * (3 - 2 * fx), uz = fz * fz * (3 - 2 * fz);
+    return hash2(ix, iz) * (1 - ux) * (1 - uz) + hash2(ix + 1, iz) * ux * (1 - uz)
+         + hash2(ix, iz + 1) * (1 - ux) * uz + hash2(ix + 1, iz + 1) * ux * uz;
+  }
+  function fbm2(x, z) { return vnoise(x, z) * 0.62 + vnoise(x * 2.13, z * 2.13) * 0.26 + vnoise(x * 4.7, z * 4.7) * 0.12; }
+  // Rolling hills that rise away from the viewpoint; a calm knoll at spawn.
+  function groundH(x, z) {
+    let h = fbm2(x * 0.013 + 7.3, z * 0.013 + 2.9) * 17 + fbm2(x * 0.055, z * 0.055) * 2.0 - 4.0;
+    const dSpawn = Math.hypot(x, z - 16);
+    h *= 0.25 + 0.75 * Math.min(1, dSpawn / 26);            // flatten near where you stand
+    const valley = Math.exp(-Math.pow((x + 6) / 26, 2));   // a gentle valley running north
+    h -= valley * 3.2 * Math.max(0, (16 - z) / 60);
+    return h;
+  }
+
+  /* ---------- Lights: one sun + sky bounce ---------- */
+  const sunDirV = new THREE.Vector3(55, 95, -70);
+  scene.add(new THREE.HemisphereLight(0xbfdcff, 0x5d7a43, 0.95));
+  const sun = new THREE.DirectionalLight(0xfff2d8, 2.0);
+  sun.position.copy(sunDirV);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -85; sun.shadow.camera.right = 85;
+  sun.shadow.camera.top = 85; sun.shadow.camera.bottom = -85;
+  sun.shadow.camera.far = 320;
+  sun.shadow.bias = -0.0006;
+  scene.add(sun);
+
+  /* ---------- 1. Sky: gradient dome + shaped midday clouds ---------- */
+  const sunDir = sunDirV.clone().normalize();
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(880, 32, 20),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, fog: false,
+      uniforms: { sunDir: { value: sunDir } },
+      vertexShader: `
+        varying vec3 vDir;
+        void main(){ vDir = normalize(position);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: `
+        varying vec3 vDir; uniform vec3 sunDir;
+        float hash21(vec2 p){ p = fract(p * vec2(234.34, 435.345)); p += dot(p, p + 34.23); return fract(p.x * p.y); }
+        float vnoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          float a = hash21(i); float b = hash21(i + vec2(1.0, 0.0));
+          float c = hash21(i + vec2(0.0, 1.0)); float d = hash21(i + vec2(1.0, 1.0));
+          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y); }
+        float fbm(vec2 p){ float v = 0.0; float a = 0.5;
+          for(int i = 0; i < 5; i++){ v += a * vnoise(p); p = p * 2.03 + vec2(19.7, 7.3); a *= 0.55; }
+          return v; }
+        void main(){
+          float h = clamp(vDir.y, -1.0, 1.0);
+          vec3 zen = vec3(0.145,0.36,0.78);     // saturated summer blue
+          vec3 mid = vec3(0.45,0.66,0.94);
+          vec3 hor = vec3(0.86,0.93,1.0);        // pale, warm-white horizon
+          vec3 col = mix(hor, mid, smoothstep(0.0, 0.24, h));
+          col = mix(col, zen, smoothstep(0.20, 0.65, h));
+          float s = max(dot(normalize(vDir), sunDir), 0.0);
+          col += vec3(1.0,0.95,0.80) * pow(s, 800.0) * 2.2;   // sun disc
+          col += vec3(1.0,0.92,0.70) * pow(s, 18.0) * 0.16;   // soft glare
+          // Shaped clouds, same warp + erosion recipe as Mirror Sky, but the
+          // light is POSTERISED into flat steps - the anime cumulus register.
+          if (h > 0.02) {
+            vec2 cuv = vDir.xz / (h + 0.24);
+            vec2 warp = vec2(fbm(cuv * 1.1), fbm(cuv * 1.1 + vec2(5.2, 1.3)));
+            vec2 q = cuv * 1.5 + (warp - 0.5) * 1.2;
+            float shape = fbm(q);
+            float detail = fbm(cuv * 5.8 + warp * 1.4);
+            float density = shape - detail * 0.36 * (1.0 - shape);
+            float band = smoothstep(0.02, 0.10, h) * (1.0 - smoothstep(0.55, 0.95, h));
+            float cov = smoothstep(0.54, 0.63, density) * band;
+            if (cov > 0.003) {
+              float towardSun = fbm(q + sunDir.xz * 0.4);
+              float light = clamp((towardSun - shape) * 2.8 + pow(s, 2.0) * 0.55 + (1.0 - h) * 0.22, 0.0, 1.0);
+              light = mix(light, floor(light * 3.5 + 0.5) / 3.5, 0.55);   // posterise
+              vec3 cloudCol = mix(vec3(0.60,0.68,0.85), vec3(1.04,1.02,0.99), light);
+              col = mix(col, cloudCol, cov * 0.96);
+            }
+          }
+          gl_FragColor = vec4(col, 1.0);
+        }`
+    })
+  );
+  scene.add(sky);
+
+  /* ---------- 2. Terrain ---------- */
+  const TER_W = 460, TER_SEG = 110;
+  const terGeo = new THREE.PlaneGeometry(TER_W, TER_W, TER_SEG, TER_SEG);
+  terGeo.rotateX(-Math.PI / 2);
+  {
+    const pos = terGeo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const cA = new THREE.Color(0x69a844), cB = new THREE.Color(0x8fc45e), cC = new THREE.Color(0x4d8a3a), tmp = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i), h = groundH(x, z);
+      pos.setY(i, h);
+      const n = fbm2(x * 0.06 + 31, z * 0.06 + 17);
+      tmp.copy(cA).lerp(cB, n).lerp(cC, Math.max(0, Math.min(1, (h - 6) / 16)) * 0.55);
+      colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
+    }
+    terGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    terGeo.computeVertexNormals();
+  }
+  const terrain = new THREE.Mesh(terGeo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }));
+  terrain.receiveShadow = true;
+  scene.add(terrain);
+
+  /* ---------- 3. Rice terraces + the hero paddy ---------- */
+  const bankMat = new THREE.MeshStandardMaterial({ color: 0x5d8a3c, flatShading: true, roughness: 1 });
+  const waterFakeMat = new THREE.MeshPhongMaterial({ color: 0x9fc6de, specular: 0xeaf6ff, shininess: 90 });
+  const terraces = [
+    { x: -17, z: -30, w: 26, d: 10, water: true  },
+    { x: -15, z: -43, w: 30, d: 10, water: true  },
+    { x: -19, z: -56, w: 24, d: 9,  water: false },
+    { x: 14,  z: -38, w: 22, d: 9,  water: true  },
+    { x: 17,  z: -50, w: 26, d: 10, water: false },
+  ];
+  let heroPaddy = null;
+  for (const t of terraces) {
+    const y = groundH(t.x, t.z);
+    const bank = new THREE.Mesh(new THREE.BoxGeometry(t.w, 1.6, t.d), bankMat);
+    bank.position.set(t.x, y + 0.35, t.z);
+    bank.castShadow = true; bank.receiveShadow = true;
+    scene.add(bank);
+    if (t.water && !heroPaddy) {
+      heroPaddy = new Reflector(new THREE.PlaneGeometry(t.w - 1.2, t.d - 1.2), {
+        textureWidth: 512, textureHeight: 512, color: 0xa8c4cf });
+      heroPaddy.rotation.x = -Math.PI / 2;
+      heroPaddy.position.set(t.x, y + 1.18, t.z);
+      scene.add(heroPaddy);
+    } else if (t.water) {
+      const w = new THREE.Mesh(new THREE.PlaneGeometry(t.w - 1.2, t.d - 1.2), waterFakeMat);
+      w.rotation.x = -Math.PI / 2;
+      w.position.set(t.x, y + 1.17, t.z);
+      scene.add(w);
+    }
+  }
+  // Rice seedlings: tiny bright tufts in rows on the dry terraces + paddy rims.
+  {
+    const tuft = new THREE.ConeGeometry(0.09, 0.42, 5);
+    const tuftMat = new THREE.MeshLambertMaterial({ color: 0x7ed957 });
+    const spots = [];
+    for (const t of terraces) {
+      const y = groundH(t.x, t.z) + 1.16;
+      for (let rx = -t.w / 2 + 2; rx < t.w / 2 - 1; rx += 1.15)
+        for (let rz = -t.d / 2 + 1.4; rz < t.d / 2 - 1; rz += 1.3)
+          if (hash2(rx * 3.1, rz * 7.7) > 0.3) spots.push([t.x + rx, y, t.z + rz]);
+    }
+    const inst = new THREE.InstancedMesh(tuft, tuftMat, spots.length);
+    const m4 = new THREE.Matrix4();
+    spots.forEach(([x, y, z], i) => { m4.makeTranslation(x, y + 0.2, z); inst.setMatrixAt(i, m4); });
+    scene.add(inst);
+  }
+
+  /* ---------- 4. Grass: one instanced draw call ---------- */
+  {
+    const blade = new THREE.PlaneGeometry(0.11, 0.62, 1, 3);
+    blade.translate(0, 0.31, 0);
+    const bp = blade.attributes.position;
+    for (let i = 0; i < bp.count; i++) { const y = bp.getY(i); bp.setX(i, bp.getX(i) + Math.pow(y / 0.62, 2) * 0.13); }
+    blade.computeVertexNormals();
+    const grassMat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
+    const COUNT = 16000;
+    const grass = new THREE.InstancedMesh(blade, grassMat, COUNT);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+    const col = new THREE.Color();
+    let placed = 0, guard = 0;
+    while (placed < COUNT && guard++ < COUNT * 30) {
+      const x = (hash2(guard * 1.7, 4.2) - 0.5) * 170;
+      const z = 26 - hash2(9.1, guard * 2.3) * 130;
+      if (Math.abs(x) < 3.4 && z < 18 && z > -46) continue;                     // keep the path clear
+      if (terraces.some(t => Math.abs(x - t.x) < t.w / 2 + 1 && Math.abs(z - t.z) < t.d / 2 + 1)) continue;
+      const s = 0.7 + hash2(guard, 8.8) * 0.9;
+      e.set(0, hash2(guard, 3.3) * Math.PI, (hash2(guard, 5.5) - 0.5) * 0.35);
+      q.setFromEuler(e);
+      v.set(x, groundH(x, z) - 0.03, z); sc.set(s, s * (0.8 + hash2(guard, 6.1) * 0.6), s);
+      m4.compose(v, q, sc);
+      grass.setMatrixAt(placed, m4);
+      col.setHSL(0.29 + hash2(guard, 7.7) * 0.04, 0.52, 0.30 + hash2(guard, 1.9) * 0.16);
+      grass.setColorAt(placed, col);
+      placed++;
+    }
+    grass.count = placed;
+    scene.add(grass);
+  }
+
+  /* ---------- 5. Trees, houses, poles, path ---------- */
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 1, flatShading: true });
+  const leafMats = [0x4e8f3a, 0x5da244, 0x3f7d33].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 1, flatShading: true }));
+  const sakuraMat = new THREE.MeshStandardMaterial({ color: 0xf2a7c3, roughness: 1, flatShading: true });
+  function tree(x, z, s, pink) {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * s, 0.22 * s, 1.6 * s, 6), trunkMat);
+    trunk.position.y = 0.8 * s; trunk.castShadow = true; g.add(trunk);
+    const mat = pink ? sakuraMat : leafMats[Math.floor(hash2(x, z) * 3)];
+    const blobs = 3 + Math.floor(hash2(z, x) * 2);
+    for (let i = 0; i < blobs; i++) {
+      const r = (0.85 - i * 0.14) * s;
+      const b = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), mat);
+      b.position.set((hash2(x + i, z) - 0.5) * 0.9 * s, (1.9 + i * 0.42) * s, (hash2(z, x + i) - 0.5) * 0.9 * s);
+      b.castShadow = true; g.add(b);
+    }
+    g.position.set(x, groundH(x, z) - 0.05, z);
+    g.rotation.y = hash2(x * 3, z) * Math.PI * 2;
+    scene.add(g);
+  }
+  const treeSpots = [[-30,-16],[26,-20],[34,-44],[-38,-38],[8,-24],[-8,-64],[30,-66],[-30,-70],
+                     [44,-30],[48,-58],[-48,-52],[16,-78],[-14,-88],[38,-86],[56,-44],[-56,-30],
+                     [22,-14],[-24,-6],[40,-8],[-42,-14],[12,-100],[-34,-98],[52,-76],[-52,-80]];
+  treeSpots.forEach(([x, z], i) => tree(x, z, 0.9 + hash2(i, 42) * 0.9, i % 6 === 2));
+
+  function house(x, z, rot) {
+    const g = new THREE.Group();
+    const walls = new THREE.Mesh(new THREE.BoxGeometry(5.4, 2.9, 4.4),
+      new THREE.MeshStandardMaterial({ color: 0xf3ecdc, roughness: 0.95 }));
+    walls.position.y = 1.45; walls.castShadow = true; walls.receiveShadow = true; g.add(walls);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(4.35, 1.9, 4),
+      new THREE.MeshStandardMaterial({ color: 0x3c4652, roughness: 0.9, flatShading: true }));
+    roof.position.y = 3.85; roof.rotation.y = Math.PI / 4; roof.scale.set(1, 1, 0.82);
+    roof.castShadow = true; g.add(roof);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.8, 0.08),
+      new THREE.MeshStandardMaterial({ color: 0x7a5a38, roughness: 1 }));
+    door.position.set(0.9, 0.9, 2.22); g.add(door);
+    g.position.set(x, groundH(x, z), z); g.rotation.y = rot;
+    scene.add(g);
+  }
+  house(-13, -33, 0.5);
+  house(19, -55, -0.4);
+
+  // Utility poles + sagging wires marching down the valley.
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x4c4238, roughness: 1 });
+  const wireMat = new THREE.MeshBasicMaterial({ color: 0x22262a });
+  const poleTops = [];
+  for (let i = 0; i < 5; i++) {
+    const x = 5.2 + i * 0.7, z = 8 - i * 13.5, y = groundH(x, z);
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 7.2, 6), poleMat);
+    p.position.set(x, y + 3.6, z); p.castShadow = true; scene.add(p);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.09, 0.09), poleMat);
+    arm.position.set(x, y + 6.6, z); scene.add(arm);
+    poleTops.push(new THREE.Vector3(x, y + 6.6, z));
+  }
+  for (let i = 0; i < poleTops.length - 1; i++) {
+    for (const off of [-0.8, 0.8]) {
+      const a = poleTops[i].clone(); a.x += off;
+      const b = poleTops[i + 1].clone(); b.x += off;
+      const mid = a.clone().lerp(b, 0.5); mid.y -= 0.85;
+      const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
+      scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 12, 0.018, 4), wireMat));
+    }
+  }
+
+  // Dirt path: a dotted ribbon of packed-earth discs down the valley.
+  const pathMat = new THREE.MeshStandardMaterial({ color: 0xc9b083, roughness: 1 });
+  for (let i = 0; i < 15; i++) {
+    const z = 15 - i * 4.1, x = Math.sin(i * 0.55) * 1.6;
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.55, 18), pathMat);
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.set(x, groundH(x, z) + 0.045, z);
+    disc.receiveShadow = true;
+    scene.add(disc);
+  }
+
+  // Wildflower specks in the near meadow.
+  {
+    const N = 260, posArr = new Float32Array(N * 3), colArr = new Float32Array(N * 3);
+    const palette = [[1, 0.85, 0.35], [1, 1, 1], [0.98, 0.62, 0.75], [0.75, 0.65, 1]];
+    for (let i = 0; i < N; i++) {
+      const x = (hash2(i * 3.7, 21) - 0.5) * 90, z = 20 - hash2(13, i * 2.9) * 80;
+      posArr[i * 3] = x; posArr[i * 3 + 1] = groundH(x, z) + 0.34; posArr[i * 3 + 2] = z;
+      const c = palette[i % 4];
+      colArr[i * 3] = c[0]; colArr[i * 3 + 1] = c[1]; colArr[i * 3 + 2] = c[2];
+    }
+    const pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+    pg.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+    scene.add(new THREE.Points(pg, new THREE.PointsMaterial({ size: 0.22, vertexColors: true, sizeAttenuation: true })));
+  }
+
+  /* ---------- 6. Distance: layered ridge silhouettes ---------- */
+  const ridgeCols = [0x7ba05b, 0x6d97a8, 0x87a8c8, 0xa8c0da];
+  const ridgeData = [[-160, -300, 150, 62], [60, -330, 190, 78], [230, -260, 140, 55], [-260, -240, 150, 58], [0, -390, 240, 92]];
+  ridgeData.forEach(([x, z, r, h], i) => {
+    const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6),
+      new THREE.MeshStandardMaterial({ color: ridgeCols[i % 4], flatShading: true, roughness: 1 }));
+    m.position.set(x, h / 2 - 9, z);
+    m.rotation.y = i * 1.3;
+    scene.add(m);
+  });
+
+  // A few painted cloud puffs for near-sky depth (static, daytime whites).
+  function puffTexture(seed) {
+    let s = seed; const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    const c = document.createElement('canvas'); c.width = 256; c.height = 160;
+    const g = c.getContext('2d');
+    const blobs = [];
+    for (let i = 0; i < 7; i++) blobs.push([36 + i * 30 + r() * 14, 104 + r() * 10, 24 + r() * 15]);
+    for (let i = 0; i < 9; i++) blobs.push([50 + r() * 156, 62 + r() * 38, 17 + r() * 20]);
+    blobs.push([118 + r() * 24, 40 + r() * 14, 30 + r() * 10]);
+    for (const [x, y, rad] of blobs) {
+      const grad = g.createRadialGradient(x, y, 0, x, y, rad);
+      grad.addColorStop(0, 'rgba(255,255,255,0.6)');
+      grad.addColorStop(0.55, 'rgba(255,255,255,0.32)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
+    }
+    g.globalCompositeOperation = 'source-atop';
+    const shade = g.createLinearGradient(0, 10, 0, 150);
+    shade.addColorStop(0, 'rgba(255,255,255,0.10)');
+    shade.addColorStop(1, 'rgba(140,165,205,0.38)');
+    g.fillStyle = shade; g.fillRect(0, 0, 256, 160);
+    g.globalCompositeOperation = 'source-over';
+    return new THREE.CanvasTexture(c);
+  }
+  const puffTex = [puffTexture(7), puffTexture(23), puffTexture(59)];
+  [[-190, 88, -320, 210], [150, 100, -350, 240], [-40, 120, -390, 280], [300, 80, -240, 180], [-320, 92, -220, 190]]
+    .forEach(([x, y, z, w], i) => {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex[i % 3], transparent: true, opacity: 0.9, depthWrite: false, fog: false }));
+      sp.position.set(x, y, z); sp.scale.set(w, w * 0.5, 1);
+      scene.add(sp);
+    });
+
+  /* ---------- Rig + controls: a fixed seat on the knoll ---------- */
+  const spawnH = groundH(0, 16);
+  const rig = new THREE.Group();
+  rig.position.set(0, spawnH, 16);
+  rig.add(camera);
+  scene.add(rig);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, spawnH + 1.7, -6);
+  const seatDist = camera.position.distanceTo(controls.target);
+  controls.minDistance = seatDist; controls.maxDistance = seatDist;
+  controls.enablePan = false;
+  controls.rotateSpeed = 0.45;
+  controls.enableDamping = true;
+
+  /* ---------- The loop: static scene, render on the animation clock ---------- */
+  renderer.setAnimationLoop(() => {
+    if (!renderer.xr.isPresenting) controls.update();
+    renderer.render(scene, camera);
+  });
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+</script>
+</body>
+</html>
